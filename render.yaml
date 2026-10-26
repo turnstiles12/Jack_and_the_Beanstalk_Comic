@@ -1,0 +1,21 @@
+# Render Blueprint: New + > Blueprint, point at this repo.
+services:
+  - type: web
+    name: beanstalk-comic
+    runtime: docker
+    plan: starter            # free tier (512 MB, sleeps when idle) can run out of memory / drop in-flight books
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: IMAGE_PROVIDER
+        value: openai        # openai | fal | mock
+      - key: OPENAI_API_KEY
+        sync: false          # you paste this in the Render dashboard; never commit it
+      - key: OPENAI_IMAGE_MODEL
+        value: gpt-image-1.5
+      - key: OPENAI_IMAGE_QUALITY
+        value: medium
+      - key: IMAGE_PARALLELISM
+        value: "2"
+      - key: VERIFY_PROVIDER
+        value: none          # set to openai to enable the face-match retry check (extra API calls)
