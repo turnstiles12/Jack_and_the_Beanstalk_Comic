@@ -23,8 +23,8 @@ import java.util.List;
 @Component
 public class PdfComposer {
 
-    /** 6 x 9 inch pages (2:3), matching OpenAI 1024x1536 / fal 768x1152 art. */
-    public static final PDRectangle PAGE_SIZE = new PDRectangle(432f, 648f);
+    /** Page width in points (6 in). Height follows the generated art's aspect ratio, so images stay full-bleed uncropped. */
+    public static final float PAGE_WIDTH = 432f;
     private static final float MARGIN = 26f;
     private static final float PAD = 14f;
 
@@ -34,6 +34,11 @@ public class PdfComposer {
 
     public byte[] compose(List<byte[]> images, String childName, String details) throws IOException {
         if (images.size() != 20) throw new IllegalArgumentException("Need exactly 20 images, got " + images.size());
+
+        java.awt.image.BufferedImage first = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(images.get(0)));
+        if (first == null) throw new IOException("Page 1 image is not a readable JPEG/PNG");
+        float h = Math.max(300f, Math.min(800f, PAGE_WIDTH * first.getHeight() / first.getWidth()));
+        final PDRectangle size = new PDRectangle(PAGE_WIDTH, h);
 
         try (PDDocument doc = new PDDocument()) {
             PDType0Font font;
@@ -46,26 +51,26 @@ public class PdfComposer {
 
             // Pages 1-19: story pages, text exactly as hard-coded in the storyboard.
             for (Storyboard.Page p : Storyboard.PAGES) {
-                PDPage page = new PDPage(PAGE_SIZE);
+                PDPage page = new PDPage(size);
                 doc.addPage(page);
                 try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
-                    drawFullBleed(doc, cs, images.get(p.number() - 1));
+                    drawFullBleed(doc, cs, images.get(p.number() - 1), size);
                     List<Para> paras = List.of(new Para(p.text(), 22f, 0));
-                    drawPanel(cs, font, paras, p.zone(), 0.30f);
+                    drawPanel(cs, font, paras, p.zone(), 0.30f, size);
                 }
             }
 
             // Page 20: About Me.
-            PDPage about = new PDPage(PAGE_SIZE);
+            PDPage about = new PDPage(size);
             doc.addPage(about);
             try (PDPageContentStream cs = new PDPageContentStream(doc, about)) {
-                drawFullBleed(doc, cs, images.get(19));
+                drawFullBleed(doc, cs, images.get(19), size);
                 List<Para> paras = new ArrayList<>();
                 paras.add(new Para("ABOUT ME", 14f, 4f));
                 paras.add(new Para(clean(font, childName), 34f, 8f));
                 String d = clean(font, details);
                 if (!d.isBlank()) paras.add(new Para(d, 16f, 0));
-                drawPanel(cs, font, paras, Storyboard.Zone.BOTTOM, 0.46f);
+                drawPanel(cs, font, paras, Storyboard.Zone.BOTTOM, 0.46f, size);
             }
 
             if (doc.getNumberOfPages() != 20) throw new IllegalStateException("PDF must have 20 pages");
@@ -76,9 +81,9 @@ public class PdfComposer {
     }
 
     /** Scale to cover the whole page, centre-crop overflow. Edge to edge, no margins. */
-    private void drawFullBleed(PDDocument doc, PDPageContentStream cs, byte[] img) throws IOException {
+    private void drawFullBleed(PDDocument doc, PDPageContentStream cs, byte[] img, PDRectangle size) throws IOException {
         PDImageXObject x = PDImageXObject.createFromByteArray(doc, img, "page");
-        float pw = PAGE_SIZE.getWidth(), ph = PAGE_SIZE.getHeight();
+        float pw = size.getWidth(), ph = size.getHeight();
         float s = Math.max(pw / x.getWidth(), ph / x.getHeight());
         float w = x.getWidth() * s, h = x.getHeight() * s;
         cs.drawImage(x, (pw - w) / 2f, (ph - h) / 2f, w, h);
@@ -89,8 +94,8 @@ public class PdfComposer {
      * Font size shrinks (down to 55%) until the block fits within maxHeightFrac of the page.
      */
     private void drawPanel(PDPageContentStream cs, PDType0Font font, List<Para> paras,
-                           Storyboard.Zone zone, float maxHeightFrac) throws IOException {
-        float pw = PAGE_SIZE.getWidth(), ph = PAGE_SIZE.getHeight();
+                           Storyboard.Zone zone, float maxHeightFrac, PDRectangle pageSize) throws IOException {
+        float pw = pageSize.getWidth(), ph = pageSize.getHeight();
         float maxTextW = pw - 2 * MARGIN - 2 * PAD;
         float maxH = ph * maxHeightFrac;
 

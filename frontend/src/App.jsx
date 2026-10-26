@@ -2,6 +2,22 @@ import { useEffect, useRef, useState } from "react";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
+// Parse a response without assuming JSON: proxies (Render, Vite) return HTML/plain text on 502/503/413.
+async function readJson(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const hint = res.status === 502 || res.status === 503 || res.status === 504
+      ? "The server is starting up or restarting. Wait a minute and try again."
+      : res.status === 413 ? "The photo is too large."
+      : "The server sent an unexpected reply.";
+    const e = new Error(`${hint} (HTTP ${res.status}${text ? `: ${text.replace(/<[^>]*>/g, " ").trim().slice(0, 120)}` : ""})`);
+    e.nonJson = true;
+    throw e;
+  }
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -12,7 +28,13 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState(null);
+  const [appearance, setAppearance] = useState("");
+  const [cfg, setCfg] = useState({ usesPhoto: true, needsAppearance: false });
   const timer = useRef(null);
+
+  useEffect(() => {
+    fetch("/api/config").then(readJson).then(setCfg).catch(() => {});
+  }, []);
 
   useEffect(() => () => { clearInterval(timer.current); if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
@@ -30,13 +52,14 @@ export default function App() {
     e.preventDefault();
     setError("");
     const body = new FormData();
-    body.append("photo", file);
+    if (file && cfg.usesPhoto) body.append("photo", file);
+    body.append("appearance", appearance.trim());
     body.append("name", name.trim());
     body.append("details", details.trim());
     try {
       const res = await fetch("/api/books", { method: "POST", body });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Upload failed");
+      const data = await readJson(res);
+      if (!res.ok) throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
       setJobId(data.id);
       setPhase("working");
       setProgress(0);
@@ -49,8 +72,8 @@ export default function App() {
   async function poll(id) {
     try {
       const res = await fetch(`/api/books/${id}`);
-      if (!res.ok) throw new Error("Lost track of your book. Please try again.");
-      const s = await res.json();
+      if (res.status === 404) throw new Error("The server restarted and lost your book. Please try again.");
+      const s = await readJson(res);
       setProgress(s.pagesDone);
       if (s.state === "DONE") { clearInterval(timer.current); setPhase("done"); }
       if (s.state === "FAILED") { clearInterval(timer.current); setError(s.error || "Generation failed."); setPhase("error"); }
@@ -72,7 +95,7 @@ export default function App() {
 
   function reset() { setPhase("form"); setError(""); setJobId(null); }
 
-  const canSubmit = file && name.trim() && consent;
+  const canSubmit = name.trim() && consent && (!cfg.usesPhoto || file) && (!cfg.needsAppearance || appearance.trim());
 
   return (
     <main className="card">
@@ -81,11 +104,22 @@ export default function App() {
 
       {phase === "form" && (
         <form onSubmit={onSubmit}>
-          <label className="drop">
-            {preview ? <img src={preview} alt="Chosen child" /> : <span>Choose one clear, front-facing photo</span>}
-            <input type="file" accept="image/jpeg,image/png" onChange={onPick} />
-          </label>
-          <p className="hint">Tips: one child only, face fully visible, good light, no sunglasses or hats.</p>
+          {cfg.usesPhoto && (<>
+            <label className="drop">
+              {preview ? <img src={preview} alt="Chosen child" /> : <span>Choose one clear, front-facing photo</span>}
+              <input type="file" accept="image/jpeg,image/png" onChange={onPick} />
+            </label>
+            <p className="hint">Tips: one child only, face fully visible, good light, no sunglasses or hats.</p>
+          </>)}
+
+          {cfg.needsAppearance && (
+            <label>How does your child look? <span className="count">{appearance.length}/150</span>
+              <input value={appearance} maxLength={150} onChange={(e) => setAppearance(e.target.value)}
+                placeholder="e.g. short curly brown hair, brown eyes, freckles, light-tan skin" required />
+              <span className="hint">This text model can't see photos, so Jack is drawn from this description.
+                The face will be similar from page to page but not an exact likeness.</span>
+            </label>
+          )}
 
           <label>Child's name
             <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mason" required />
@@ -98,8 +132,9 @@ export default function App() {
 
           <label className="check">
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-            <span>I'm the parent/guardian and I agree this photo is sent to an AI image service to make the book.
-              It is not stored by this app and is discarded after generation.</span>
+            <span>{cfg.usesPhoto
+              ? "I'm the parent/guardian and I agree this photo is sent to an AI image service to make the book. It is not stored by this app and is discarded after generation."
+              : "I'm the parent/guardian and I agree the name and description are sent to an AI image service to make the book. Nothing is stored after generation."}</span>
           </label>
 
           {error && <p className="error">{error}</p>}

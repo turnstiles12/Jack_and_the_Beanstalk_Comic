@@ -1,9 +1,17 @@
 package com.beanstalk;
 
 /**
- * Produces one page illustration (JPEG/PNG bytes) from the page's prompt and the single reference photo.
- * Implementations are selected with beanstalk.image.provider = openai | fal | mock.
+ * Produces one page illustration (JPEG/PNG bytes). Selected with beanstalk.image.provider =
+ * cloudflare | openai | fal | mock.
  */
 public interface ImageGenerator {
-    byte[] generate(Storyboard.Page page, byte[] referenceJpeg, long seed) throws Exception;
+
+    /**
+     * @param referenceJpeg the child's photo (null if {@link #usesPhoto()} is false)
+     * @param looks         text that fills the {LOOKS} slot of the prompt
+     */
+    byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception;
+
+    /** False for text-only models (they never see the photo; the typed appearance description is used). */
+    default boolean usesPhoto() { return true; }
 }

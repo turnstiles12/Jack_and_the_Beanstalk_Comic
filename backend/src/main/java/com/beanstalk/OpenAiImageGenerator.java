@@ -43,13 +43,13 @@ public class OpenAiImageGenerator implements ImageGenerator {
     @Value("${beanstalk.openai.input-fidelity:high}") String inputFidelity;
 
     @Override
-    public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, long seed) throws Exception {
+    public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception {
         if (apiKey == null || apiKey.isBlank()) throw new IllegalStateException("OPENAI_API_KEY is not set");
 
         String boundary = "----beanstalk" + UUID.randomUUID();
         ByteArrayOutputStream body = new ByteArrayOutputStream();
         field(body, boundary, "model", model);
-        field(body, boundary, "prompt", REFERENCE_INSTRUCTION + " " + page.prompt());
+        field(body, boundary, "prompt", REFERENCE_INSTRUCTION + " " + page.prompt(looks));
         field(body, boundary, "size", size);
         field(body, boundary, "quality", quality);
         field(body, boundary, "n", "1");

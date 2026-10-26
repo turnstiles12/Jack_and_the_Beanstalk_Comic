@@ -34,14 +34,14 @@ public class FalImageGenerator implements ImageGenerator {
     @Value("${beanstalk.image.id-weight}") private double idWeight;
 
     @Override
-    public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, long seed) throws Exception {
+    public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception {
         String referenceDataUri = "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(referenceJpeg);
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("FAL_KEY environment variable is not set");
         }
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("prompt", page.prompt());                 // scene + quiet zone + fixed STYLE (last)
+        body.put("prompt", page.prompt(looks));                 // scene + quiet zone + fixed STYLE (last)
         body.put("negative_prompt", Storyboard.NEGATIVE);   // no-text guard lives here only
         body.put("reference_image_url", referenceDataUri);  // identical on all 20 calls
         body.put("image_size", Map.of("width", width, "height", height));

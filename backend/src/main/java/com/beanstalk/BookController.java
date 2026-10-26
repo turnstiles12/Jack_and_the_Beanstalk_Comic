@@ -16,10 +16,21 @@ public class BookController {
     @GetMapping("/api/health")
     public Map<String, String> health() { return Map.of("status", "ok"); }
 
+    /** Lets the UI show only the inputs the active image provider actually needs. */
+    @GetMapping("/api/config")
+    public Map<String, Object> config() {
+        boolean photo = books.usesPhoto();
+        return Map.of("usesPhoto", photo, "needsAppearance", !photo);
+    }
+
     @PostMapping(path = "/api/books", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> create(@RequestParam("photo") MultipartFile photo,
+    public ResponseEntity<?> create(@RequestParam(value = "photo", required = false) MultipartFile photo,
                                     @RequestParam("name") String name,
-                                    @RequestParam(value = "details", defaultValue = "") String details) {
+                                    @RequestParam(value = "details", defaultValue = "") String details,
+                                    @RequestParam(value = "appearance", defaultValue = "") String appearance) {
+        appearance = appearance.strip();
+        if (appearance.length() > 150)
+            return ResponseEntity.badRequest().body(Map.of("error", "Appearance must be 150 characters or fewer."));
         name = name.strip();
         details = details.strip();
         if (name.isEmpty() || name.length() > 30)
@@ -27,7 +38,7 @@ public class BookController {
         if (details.length() > 400)
             return ResponseEntity.badRequest().body(Map.of("error", "Details must be 400 characters or fewer."));
         try {
-            BookService.Job job = books.start(photo.getBytes(), name, details);
+            BookService.Job job = books.start(photo == null ? null : photo.getBytes(), name, details, appearance);
             return ResponseEntity.accepted().body(Map.of("id", job.id));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

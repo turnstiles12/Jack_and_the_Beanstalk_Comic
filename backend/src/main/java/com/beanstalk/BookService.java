@@ -57,17 +57,32 @@ public class BookService {
         this.pagePool = Executors.newFixedThreadPool(parallelism);
     }
 
-    public Job start(byte[] photo, String name, String details) throws Exception {
-        byte[] refJpeg = normalisePhoto(photo);      // validates it's a real image, strips EXIF, caps size
+    public boolean usesPhoto() { return generator.usesPhoto(); }
+
+    public Job start(byte[] photo, String name, String details, String appearance) throws Exception {
+        boolean hasPhoto = photo != null && photo.length > 0;
+        final byte[] refJpeg;
+        final String looks;
+        if (generator.usesPhoto()) {
+            if (!hasPhoto) throw new IllegalArgumentException("A photo is required.");
+            refJpeg = normalisePhoto(photo);         // validates it's a real image, strips EXIF, caps size
+            looks = Storyboard.PHOTO_LOOKS;
+        } else {
+            // Text-only model: it cannot see a photo, so the typed description is the only identity signal.
+            if (appearance == null || appearance.isBlank())
+                throw new IllegalArgumentException("Please describe how the child looks (hair, eyes, skin tone).");
+            refJpeg = hasPhoto ? normalisePhoto(photo) : null;   // only used by the optional verifier
+            looks = "with " + appearance.strip();
+        }
         Job job = new Job();
         jobs.put(job.id, job);
-        jobPool.submit(() -> run(job, refJpeg, name, details));
+        jobPool.submit(() -> run(job, refJpeg, looks, name, details));
         return job;
     }
 
     public Job get(String id) { return jobs.get(id); }
 
-    private void run(Job job, byte[] refJpeg, String name, String details) {
+    private void run(Job job, byte[] refJpeg, String looks, String name, String details) {
         try {
             List<Storyboard.Page> all = new ArrayList<>(Storyboard.PAGES);
             all.add(Storyboard.ABOUT_ME_PORTRAIT);
@@ -75,7 +90,7 @@ public class BookService {
             List<Future<byte[]>> futures = new ArrayList<>();
             for (Storyboard.Page p : all) {
                 futures.add(pagePool.submit(() -> {
-                    byte[] img = generateWithRetry(p, refJpeg);
+                    byte[] img = generateWithRetry(p, refJpeg, looks);
                     job.pagesDone++;
                     return img;
                 }));
@@ -92,15 +107,15 @@ public class BookService {
     }
 
     /** Same reference on every attempt; only the seed is nudged if the identity check rejects the result. */
-    private byte[] generateWithRetry(Storyboard.Page p, byte[] refJpeg) throws Exception {
+    private byte[] generateWithRetry(Storyboard.Page p, byte[] refJpeg, String looks) throws Exception {
         Exception last = null;
         byte[] lastImg = null;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             try {
-                byte[] img = generator.generate(p, refJpeg, seed + attempt);
+                byte[] img = generator.generate(p, refJpeg, looks, seed + attempt);
                 lastImg = img;
                 boolean others = p.number() == 1 || p.number() == 14 || p.number() == 19;
-                if (verifier.sameChild(refJpeg, img, others)) return img;
+                if (refJpeg == null || verifier.sameChild(refJpeg, img, others)) return img;
             } catch (Exception e) {
                 last = e;
                 Thread.sleep(1500L * (attempt + 1));

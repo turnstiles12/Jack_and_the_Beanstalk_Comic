@@ -21,8 +21,11 @@ public final class Storyboard {
 
     /** Same clothes on every page. */
     public static final String JACK =
-            "Jack, a young child with the face from the reference photo, wearing a rust-orange tunic, "
+            "Jack, a young child {LOOKS}, wearing a rust-orange tunic, "
           + "a brown leather vest, tan trousers, and a small green cap";
+
+    /** Fills {LOOKS} for providers that receive the photo (openai, fal, mock). */
+    public static final String PHOTO_LOOKS = "with the face from the reference photo";
 
     /** Sent as negative_prompt only (never in the positive prompt, which would plant the idea of text). */
     public static final String NEGATIVE =
@@ -43,7 +46,12 @@ public final class Storyboard {
 
         /** Final positive prompt: scene + quiet-zone note + the fixed style string, last. */
         public String prompt() {
-            return scene + " " + quiet + " " + STYLE;
+            return prompt(PHOTO_LOOKS);
+        }
+
+        /** Same, with the child's look filled in ("with short curly brown hair, brown eyes" for text-only models). */
+        public String prompt(String looks) {
+            return (scene + " " + quiet).replace("{LOOKS}", looks) + " " + STYLE;
         }
     }
 

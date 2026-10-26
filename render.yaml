@@ -8,14 +8,15 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: IMAGE_PROVIDER
-        value: openai        # openai | fal | mock
-      - key: OPENAI_API_KEY
-        sync: false          # you paste this in the Render dashboard; never commit it
-      - key: OPENAI_IMAGE_MODEL
-        value: gpt-image-1.5
-      - key: OPENAI_IMAGE_QUALITY
-        value: medium
+        value: cloudflare    # cloudflare | openai | fal | mock
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false          # paste in the Render dashboard
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false          # token with "Workers AI" permission; never commit it
+      # Only needed if you switch IMAGE_PROVIDER to openai:
+      # - key: OPENAI_API_KEY
+      #   sync: false
       - key: IMAGE_PARALLELISM
         value: "2"
       - key: VERIFY_PROVIDER
-        value: none          # set to openai to enable the face-match retry check (extra API calls)
+        value: none          # set to openai (needs OPENAI_API_KEY and a photo) to enable the face-match retry check (extra API calls)

@@ -15,7 +15,7 @@ import java.io.ByteArrayOutputStream;
 @ConditionalOnProperty(name = "beanstalk.image.provider", havingValue = "mock")
 public class MockImageGenerator implements ImageGenerator {
     @Override
-    public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, long seed) throws Exception {
+    public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception {
         int i = page.number();
         BufferedImage im = new BufferedImage(1024, 1536, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = im.createGraphics();
