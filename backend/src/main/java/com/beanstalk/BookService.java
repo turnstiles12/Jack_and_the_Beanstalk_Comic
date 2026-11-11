@@ -23,7 +23,8 @@ import java.util.concurrent.*;
 /**
  * Orchestrates one book: normalise the photo ONCE, then generate all 20 illustrations
  * (every call gets the identical reference + seed + style string), then compose the PDF.
- * Jobs live in memory only; the child's photo is never written to disk.
+ * In-flight jobs live in memory only; the child's photo is never written to disk. A finished book is saved
+ * to the signed-in account's folder ({@link BookStore}) so it can be downloaded again after signing back in.
  */
 @Service
 public class BookService {
@@ -32,34 +33,42 @@ public class BookService {
 
     public static final class Job {
         public final String id = UUID.randomUUID().toString();
+        public final String owner;     // Google account id (sub) that started this book
+        public final String name;      // child's name, used for the download file name
         public volatile State state = State.RUNNING;
         public volatile int pagesDone = 0;
         public volatile String error;
         public volatile byte[] pdf;
         public final long createdAt = System.currentTimeMillis();
+
+        Job(String owner, String name) { this.owner = owner; this.name = name; }
     }
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BookService.class);
 
     private final Map<String, Job> jobs = new ConcurrentHashMap<>();
     private final ImageGenerator generator;
     private final PdfComposer composer;
     private final FaceVerifier verifier;
+    private final BookStore store;
     private final ExecutorService jobPool = Executors.newFixedThreadPool(2);
     private final ExecutorService pagePool;
 
     @Value("${beanstalk.image.seed}") private long seed;
     @Value("${beanstalk.image.max-attempts}") private int maxAttempts;
 
-    public BookService(ImageGenerator generator, PdfComposer composer, FaceVerifier verifier,
+    public BookService(ImageGenerator generator, PdfComposer composer, FaceVerifier verifier, BookStore store,
                        @Value("${beanstalk.image.parallelism}") int parallelism) {
         this.generator = generator;
         this.composer = composer;
         this.verifier = verifier;
+        this.store = store;
         this.pagePool = Executors.newFixedThreadPool(parallelism);
     }
 
     public boolean usesPhoto() { return generator.usesPhoto(); }
 
-    public Job start(byte[] photo, String name, String details, String appearance) throws Exception {
+    public Job start(String owner, byte[] photo, String name, String details, String appearance) throws Exception {
         boolean hasPhoto = photo != null && photo.length > 0;
         final byte[] refJpeg;
         final String looks;
@@ -74,13 +83,17 @@ public class BookService {
             refJpeg = hasPhoto ? normalisePhoto(photo) : null;   // only used by the optional verifier
             looks = "with " + appearance.strip();
         }
-        Job job = new Job();
+        Job job = new Job(owner, name);
         jobs.put(job.id, job);
         jobPool.submit(() -> run(job, refJpeg, looks, name, details));
         return job;
     }
 
-    public Job get(String id) { return jobs.get(id); }
+    /** Only the account that started a book may see its job. */
+    public Job get(String owner, String id) {
+        Job j = jobs.get(id);
+        return j != null && j.owner.equals(owner) ? j : null;
+    }
 
     private void run(Job job, byte[] refJpeg, String looks, String name, String details) {
         try {
@@ -98,7 +111,13 @@ public class BookService {
             List<byte[]> images = new ArrayList<>();
             for (Future<byte[]> f : futures) images.add(f.get());   // order preserved: page 1..20
 
-            job.pdf = composer.compose(images, name, details);
+            byte[] pdf = composer.compose(images, name, details);
+            try {
+                store.save(job.owner, job.id, name, pdf, thumbnail(images.get(0)));
+            } catch (Exception e) {
+                log.error("Could not save book {} to storage; keeping it in memory only", job.id, e);
+                job.pdf = pdf;      // the user can still download it now, it just won't be in their library
+            }
             job.state = State.DONE;
         } catch (Exception e) {
             job.error = rootMessage(e);
@@ -123,6 +142,26 @@ public class BookService {
         }
         if (lastImg != null) return lastImg;   // checker kept saying no; ship best effort rather than fail the book
         throw new RuntimeException("Page " + p.number() + " failed: " + rootMessage(last), last);
+    }
+
+    /** Small JPEG of page 1 for the "My books" shelf; null if it can't be made (the book is still saved). */
+    static byte[] thumbnail(byte[] pageImage) {
+        try {
+            BufferedImage src = ImageIO.read(new ByteArrayInputStream(pageImage));
+            if (src == null) return null;
+            double s = Math.min(1.0, 360.0 / src.getWidth());
+            int w = Math.max(1, (int) Math.round(src.getWidth() * s)), h = Math.max(1, (int) Math.round(src.getHeight() * s));
+            BufferedImage rgb = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = rgb.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(src, 0, 0, w, h, java.awt.Color.WHITE, null);
+            g.dispose();
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(rgb, "jpeg", out);
+            return out.toByteArray();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     static byte[] normalisePhoto(byte[] raw) throws Exception {

@@ -6,6 +6,11 @@ services:
     plan: starter            # free tier (512 MB, sleeps when idle) can run out of memory / drop in-flight books
     healthCheckPath: /api/health
     autoDeployTrigger: commit
+    # Saved books live here. Without a disk they are lost on every deploy/restart. (Disks need a paid plan.)
+    disk:
+      name: books
+      mountPath: /data
+      sizeGB: 2
     envVars:
       - key: IMAGE_PROVIDER
         value: cloudflare    # cloudflare | openai | fal | mock
@@ -16,6 +21,17 @@ services:
       # Only needed if you switch IMAGE_PROVIDER to openai:
       # - key: OPENAI_API_KEY
       #   sync: false
+      # ---- access control ----
+      - key: SITE_PASSWORD
+        sync: false          # the shared password visitors type on the first page
+      - key: GOOGLE_CLIENT_ID
+        sync: false          # OAuth Web client id from Google Cloud Console
+      - key: SESSION_SECRET
+        generateValue: true  # signs the login cookie; Render generates a random value once
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: BOOKS_DIR
+        value: /data/books   # on the persistent disk above
       - key: IMAGE_PARALLELISM
         value: "2"
       - key: VERIFY_PROVIDER

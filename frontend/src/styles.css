@@ -14,3 +14,28 @@ button:disabled { background: #9bb; cursor: not-allowed; }
 button.link { background: none; color: #2f8f3a; }
 .error { color: #b3261e; } .status { display: grid; gap: 12px; text-align: center; }
 progress { width: 100%; height: 16px; }
+
+/* ---- access control pages, header, library ---- */
+.center { text-align: center; margin-top: 48px; }
+.gate { text-align: center; }
+.gate form { text-align: left; margin-top: 16px; }
+.gate-icon { font-size: 40px; margin-bottom: 8px; }
+.google-btn { display: flex; justify-content: center; margin: 20px 0 8px; min-height: 44px; }
+input[type=password] { padding: 10px; border: 1px solid #bcc; border-radius: 8px; font: inherit; }
+.bar { max-width: 480px; margin: 16px auto 0; padding: 0 8px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bar nav, .who { display: flex; align-items: center; gap: 6px; }
+.who img { width: 28px; height: 28px; border-radius: 50%; }
+.who span { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+button.tab { background: #fff; color: #2f8f3a; border: 1px solid #2f8f3a; padding: 6px 12px; font-size: 14px; }
+button.tab.on { background: #2f8f3a; color: #fff; }
+button.link { padding: 6px 8px; font-size: 14px; }
+button.danger { color: #b3261e; }
+.card.wide { max-width: 720px; }
+.bar:has(+ .card.wide) { max-width: 720px; }
+.shelf { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.book { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: center; padding: 10px; border: 1px solid #d5e3cf; border-radius: 12px; }
+.book img { width: 96px; height: 96px; object-fit: cover; border-radius: 8px; background: #eaf5e4; }
+.book-info { display: grid; gap: 4px; }
+.row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.row button:first-child { padding: 8px 12px; font-size: 14px; }
+.empty { text-align: center; display: grid; gap: 12px; padding: 16px 0; }
