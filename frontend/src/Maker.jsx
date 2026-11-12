@@ -46,8 +46,8 @@ export default function Maker({ onLibrary }) {
   function onPick(e) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!/^image\/(jpeg|png)$/.test(f.type)) return setError("Please choose a JPG or PNG photo.");
-    if (f.size > MAX_BYTES) return setError("That photo is over 10 MB.");
+    if (!/^image\/(jpeg|png)$/.test(f.type)) return setError("Please choose a JPG or PNG reference image.");
+    if (f.size > MAX_BYTES) return setError("That image is over 10 MB.");
     setError("");
     setFile(f);
     setPreview(URL.createObjectURL(f));
@@ -106,7 +106,7 @@ export default function Maker({ onLibrary }) {
         <form onSubmit={onSubmit}>
           {cfg.usesPhoto && (<>
             <label className="drop">
-              {preview ? <img src={preview} alt="Chosen child" /> : <span>Choose one clear, front-facing photo</span>}
+              {preview ? <img src={preview} alt="Chosen child" /> : <span>Choose a reference image (one clear, front-facing photo)</span>}
               <input type="file" accept="image/jpeg,image/png" onChange={onPick} />
             </label>
             <p className="hint">Tips: one child only, face fully visible, good light, no sunglasses or hats.</p>

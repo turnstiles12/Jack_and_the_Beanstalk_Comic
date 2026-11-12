@@ -8,7 +8,7 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: IMAGE_PROVIDER
-        value: cloudflare    # cloudflare | openai | fal | mock
+        value: cloudflare-ref    # cloudflare-ref (reference image) | cloudflare (text-only) | openai | fal | mock
       - key: CLOUDFLARE_ACCOUNT_ID
         sync: false          # paste in the Render dashboard
       - key: CLOUDFLARE_API_TOKEN
