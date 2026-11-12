@@ -39,3 +39,5 @@ button.danger { color: #b3261e; }
 .row { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .row button:first-child { padding: 8px 12px; font-size: 14px; }
 .empty { text-align: center; display: grid; gap: 12px; padding: 16px 0; }
+
+.price { margin: 12px 0 8px; text-align: center; color: #444; }

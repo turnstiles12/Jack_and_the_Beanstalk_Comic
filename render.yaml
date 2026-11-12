@@ -36,3 +36,5 @@ services:
         value: "2"
       - key: VERIFY_PROVIDER
         value: none          # set to openai (needs OPENAI_API_KEY and a photo) to enable the face-match retry check (extra API calls)
+      - key: STRIPE_SECRET_KEY
+        sync: false          # Stripe secret key (sk_live_... / sk_test_...); never commit it

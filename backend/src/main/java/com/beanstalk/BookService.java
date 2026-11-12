@@ -29,17 +29,24 @@ import java.util.concurrent.*;
 @Service
 public class BookService {
 
-    public enum State { RUNNING, DONE, FAILED }
+    public enum State { AWAITING_PAYMENT, RUNNING, DONE, FAILED }
 
     public static final class Job {
         public final String id = UUID.randomUUID().toString();
         public final String owner;     // Google account id (sub) that started this book
         public final String name;      // child's name, used for the download file name
-        public volatile State state = State.RUNNING;
+        public volatile State state = State.AWAITING_PAYMENT;
         public volatile int pagesDone = 0;
         public volatile String error;
         public volatile byte[] pdf;
         public final long createdAt = System.currentTimeMillis();
+        // Kept in memory until the book is paid for, then handed to the generator.
+        volatile byte[] refJpeg;
+        volatile String looks;
+        volatile String details;
+        // Billable API calls this book needed, for the average-cost figure.
+        final java.util.concurrent.atomic.AtomicInteger imageCalls = new java.util.concurrent.atomic.AtomicInteger();
+        final java.util.concurrent.atomic.AtomicInteger verifyCalls = new java.util.concurrent.atomic.AtomicInteger();
 
         Job(String owner, String name) { this.owner = owner; this.name = name; }
     }
@@ -51,6 +58,7 @@ public class BookService {
     private final PdfComposer composer;
     private final FaceVerifier verifier;
     private final BookStore store;
+    private final CostTracker costs;
     private final ExecutorService jobPool = Executors.newFixedThreadPool(2);
     private final ExecutorService pagePool;
 
@@ -58,17 +66,19 @@ public class BookService {
     @Value("${beanstalk.image.max-attempts}") private int maxAttempts;
 
     public BookService(ImageGenerator generator, PdfComposer composer, FaceVerifier verifier, BookStore store,
-                       @Value("${beanstalk.image.parallelism}") int parallelism) {
+                       CostTracker costs, @Value("${beanstalk.image.parallelism}") int parallelism) {
         this.generator = generator;
         this.composer = composer;
         this.verifier = verifier;
         this.store = store;
+        this.costs = costs;
         this.pagePool = Executors.newFixedThreadPool(parallelism);
     }
 
     public boolean usesPhoto() { return generator.usesPhoto(); }
 
-    public Job start(String owner, byte[] photo, String name, String details, String appearance) throws Exception {
+    /** Validates the inputs and holds them in memory as an unpaid job. Nothing is generated until {@link #begin}. */
+    public Job prepare(String owner, byte[] photo, String name, String details, String appearance) throws Exception {
         boolean hasPhoto = photo != null && photo.length > 0;
         final byte[] refJpeg;
         final String looks;
@@ -84,9 +94,23 @@ public class BookService {
             looks = "with " + appearance.strip();
         }
         Job job = new Job(owner, name);
+        job.refJpeg = refJpeg;
+        job.looks = looks;
+        job.details = details;
         jobs.put(job.id, job);
-        jobPool.submit(() -> run(job, refJpeg, looks, name, details));
         return job;
+    }
+
+    /** Starts generating a paid job. Safe to call twice: only the first call does anything. */
+    public void begin(Job job) {
+        synchronized (job) {
+            if (job.state != State.AWAITING_PAYMENT) return;
+            job.state = State.RUNNING;
+        }
+        final byte[] ref = job.refJpeg;
+        final String looks = job.looks, details = job.details;
+        job.refJpeg = null; job.looks = null; job.details = null;
+        jobPool.submit(() -> run(job, ref, looks, job.name, details));
     }
 
     /** Only the account that started a book may see its job. */
@@ -103,7 +127,7 @@ public class BookService {
             List<Future<byte[]>> futures = new ArrayList<>();
             for (Storyboard.Page p : all) {
                 futures.add(pagePool.submit(() -> {
-                    byte[] img = generateWithRetry(p, refJpeg, looks);
+                    byte[] img = generateWithRetry(job, p, refJpeg, looks);
                     job.pagesDone++;
                     return img;
                 }));
@@ -119,6 +143,7 @@ public class BookService {
                 job.pdf = pdf;      // the user can still download it now, it just won't be in their library
             }
             job.state = State.DONE;
+            costs.recordBook(job.imageCalls.get(), job.verifyCalls.get());
         } catch (Exception e) {
             job.error = rootMessage(e);
             job.state = State.FAILED;
@@ -126,15 +151,18 @@ public class BookService {
     }
 
     /** Same reference on every attempt; only the seed is nudged if the identity check rejects the result. */
-    private byte[] generateWithRetry(Storyboard.Page p, byte[] refJpeg, String looks) throws Exception {
+    private byte[] generateWithRetry(Job job, Storyboard.Page p, byte[] refJpeg, String looks) throws Exception {
         Exception last = null;
         byte[] lastImg = null;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 byte[] img = generator.generate(p, refJpeg, looks, seed + attempt);
                 lastImg = img;
+                job.imageCalls.incrementAndGet();
                 boolean others = p.number() == 1 || p.number() == 14 || p.number() == 19;
-                if (refJpeg == null || verifier.sameChild(refJpeg, img, others)) return img;
+                if (refJpeg == null) return img;
+                if (verifier.active()) job.verifyCalls.incrementAndGet();
+                if (verifier.sameChild(refJpeg, img, others)) return img;
             } catch (Exception e) {
                 last = e;
                 Thread.sleep(1500L * (attempt + 1));
@@ -196,8 +224,9 @@ public class BookService {
     /** Drop finished jobs after 30 minutes so photos/PDFs don't accumulate in memory. */
     @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 300_000)
     public void sweep() {
-        long cutoff = System.currentTimeMillis() - 30 * 60_000L;
-        jobs.values().removeIf(j -> j.state != State.RUNNING && j.createdAt < cutoff);
+        long now = System.currentTimeMillis();
+        jobs.values().removeIf(j -> j.state != State.RUNNING
+                && j.createdAt < now - (j.state == State.AWAITING_PAYMENT ? 120 : 30) * 60_000L);
     }
 
     @PreDestroy

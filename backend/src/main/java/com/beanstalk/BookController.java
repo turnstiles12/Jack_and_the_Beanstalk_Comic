@@ -15,8 +15,14 @@ public class BookController {
 
     private final BookService books;
     private final BookStore store;
+    private final StripePayments stripe;
+    private final CostTracker costs;
 
-    public BookController(BookService books, BookStore store) { this.books = books; this.store = store; }
+    @org.springframework.beans.factory.annotation.Value("${beanstalk.app-base-url:}") String appBaseUrl;
+
+    public BookController(BookService books, BookStore store, StripePayments stripe, CostTracker costs) {
+        this.books = books; this.store = store; this.stripe = stripe; this.costs = costs;
+    }
 
     @GetMapping("/api/health")
     public Map<String, String> health() { return Map.of("status", "ok"); }
@@ -25,15 +31,25 @@ public class BookController {
     @GetMapping("/api/config")
     public Map<String, Object> config() {
         boolean photo = books.usesPhoto();
-        return Map.of("usesPhoto", photo, "needsAppearance", !photo);
+        return Map.of("usesPhoto", photo, "needsAppearance", !photo,
+                "priceCents", stripe.priceCents(),
+                "avgCostCents", Math.round(costs.averageUsd() * 10000) / 100.0,   // e.g. 3.0 = $0.03
+                "booksMade", costs.books());
     }
 
+    /**
+     * Step 1 of buying a book: validate the form, hold it (unpaid) in memory and return a Stripe Checkout URL.
+     * Generation only starts in {@link #confirm}, after Stripe says the session is paid.
+     */
     @PostMapping(path = "/api/books", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> create(@RequestAttribute(AuthFilter.USER) AuthSession user,
                                     @RequestParam(value = "photo", required = false) MultipartFile photo,
                                     @RequestParam("name") String name,
                                     @RequestParam(value = "details", defaultValue = "") String details,
-                                    @RequestParam(value = "appearance", defaultValue = "") String appearance) {
+                                    @RequestParam(value = "appearance", defaultValue = "") String appearance,
+                                    @RequestParam(value = "origin", defaultValue = "") String origin) {
+        if (!stripe.paymentsDisabled() && !stripe.configured())
+            return ResponseEntity.status(503).body(Map.of("error", "Payments are not set up on the server yet."));
         appearance = appearance.strip();
         if (appearance.length() > 150)
             return ResponseEntity.badRequest().body(Map.of("error", "Appearance must be 150 characters or fewer."));
@@ -43,14 +59,43 @@ public class BookController {
             return ResponseEntity.badRequest().body(Map.of("error", "Name must be 1-30 characters."));
         if (details.length() > 400)
             return ResponseEntity.badRequest().body(Map.of("error", "Details must be 400 characters or fewer."));
+        String base = appBaseUrl.isBlank() ? origin.strip() : appBaseUrl.strip();
+        base = base.replaceAll("/+$", "");
         try {
-            BookService.Job job = books.start(user.sub(), photo == null ? null : photo.getBytes(), name, details, appearance);
-            return ResponseEntity.accepted().body(Map.of("id", job.id));
+            BookService.Job job = books.prepare(user.sub(), photo == null ? null : photo.getBytes(), name, details, appearance);
+            if (stripe.paymentsDisabled()) {            // local development only (STRIPE_PAYMENTS_DISABLED=true)
+                books.begin(job);
+                return ResponseEntity.accepted().body(Map.of("id", job.id));
+            }
+            if (!base.matches("https?://[A-Za-z0-9.:\\[\\]-]+"))
+                return ResponseEntity.badRequest().body(Map.of("error", "Could not work out the site address."));
+            StripePayments.Checkout c = stripe.createCheckout(job.id, user.sub(), base);
+            return ResponseEntity.accepted().body(Map.of("id", job.id, "checkoutUrl", c.url()));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(502).body(Map.of("error", "Could not start checkout. Please try again."));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("error", "Could not read the photo."));
         }
+    }
+
+    /** Step 2: the browser comes back from Stripe with a session id; start the book only if it is really paid. */
+    @PostMapping("/api/books/{id}/confirm")
+    public ResponseEntity<?> confirm(@RequestAttribute(AuthFilter.USER) AuthSession user, @PathVariable String id,
+                                     @RequestBody Map<String, String> body) {
+        BookService.Job job = books.get(user.sub(), id);
+        if (job == null)
+            return ResponseEntity.status(404).body(Map.of("error",
+                    "We couldn't find that book (the server may have restarted). If you were charged, contact us for a refund."));
+        try {
+            if (!stripe.verifyPaid(body.get("sessionId"), job.id, user.sub()))
+                return ResponseEntity.status(402).body(Map.of("error", "Payment has not been completed."));
+        } catch (Exception e) {
+            return ResponseEntity.status(502).body(Map.of("error", "Could not verify payment. Please try again."));
+        }
+        books.begin(job);
+        return ResponseEntity.ok(Map.of("id", job.id));
     }
 
     /** The signed-in user's saved books, newest first. */

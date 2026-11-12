@@ -35,6 +35,12 @@ public class FaceVerifier {
     @Value("${beanstalk.verify.anthropic-key:}") String anthropicKey;
     @Value("${beanstalk.verify.anthropic-model:claude-sonnet-4-5}") String anthropicModel;
 
+    /** True when a check actually calls an outside API (so it costs money). */
+    public boolean active() {
+        String p = provider == null ? "none" : provider.toLowerCase();
+        return (p.equals("openai") && !openaiKey.isBlank()) || (p.equals("anthropic") && !anthropicKey.isBlank());
+    }
+
     public boolean sameChild(byte[] referenceJpeg, byte[] pageImage, boolean pageHasOtherPeople) {
         try {
             String q = "Image 1 is a photo of a real child. Image 2 is a 3D-animated storybook illustration "

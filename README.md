@@ -36,6 +36,12 @@ Each finished book is written to `BOOKS_DIR/<sha256(google account id)>/` as `<i
 3. Under **Authorized JavaScript origins** add every address the site is opened from, e.g. `http://localhost:5173`, `http://localhost:8080` and `https://<your-service>.onrender.com`. (No redirect URI is needed.)
 4. Copy the client ID into `GOOGLE_CLIENT_ID`.
 
+## Payment ($0.99 per book) and cost display
+- `POST /api/books` validates the form, holds it unpaid in memory and returns a Stripe Checkout URL. The browser pays on Stripe and returns to `/?book=<id>&session_id=...`; `POST /api/books/{id}/confirm` asks Stripe (`StripePayments`) whether that session is paid, for this book, this account and the right amount, and only then starts generation.
+- The form shows "Purchase book for $0.99 - average book costs $0.0X to make". The average comes from `CostTracker`: every image call and identity-check call a finished book needed (retries included) is priced at a per-call rate and the running total is saved in `BOOKS_DIR/cost-stats.json`. Providers don't return a dollar amount per call, so the rates are config (`IMAGE_CALL_COST_USD`, `VERIFY_CALL_COST_USD`; defaults per provider). Before the first book it shows an estimate.
+- Env: `STRIPE_SECRET_KEY` (required; use `sk_test_...` first), optional `BOOK_PRICE_CENTS`, `APP_BASE_URL`. `STRIPE_PAYMENTS_DISABLED=true` skips payment for local development only.
+- Limitation: an unpaid/paid job lives in server memory, so a restart between paying and returning loses the book (the user is told to ask for a refund).
+
 ## Rules and where they are enforced
 - Fixed style string: `Storyboard.STYLE`, appended last to every prompt (unit test asserts this for all 20 pages).
 - No text in images: no prompt asks for text or text-bearing objects; `negative_prompt` also lists text terms. All words come from `PdfComposer`.

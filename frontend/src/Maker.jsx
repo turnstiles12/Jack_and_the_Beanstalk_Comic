@@ -14,11 +14,31 @@ export default function Maker({ onLibrary }) {
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState(null);
   const [appearance, setAppearance] = useState("");
-  const [cfg, setCfg] = useState({ usesPhoto: true, needsAppearance: false });
+  const [cfg, setCfg] = useState({ usesPhoto: true, needsAppearance: false, priceCents: 99, avgCostCents: null });
   const timer = useRef(null);
 
   useEffect(() => {
     api("/api/config").then(readJson).then(setCfg).catch(() => {});
+  }, []);
+
+  // Returning from Stripe Checkout: ?book=<id>&session_id=cs_...  (or ?canceled=1)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    if (!q.has("book") && !q.has("canceled")) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    if (q.has("canceled")) { setError("Payment was canceled, so no book was made and you weren't charged. Fill in the form to try again."); return; }
+    const id = q.get("book");
+    setPhase("working");
+    api(`/api/books/${id}/confirm`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: q.get("session_id") }),
+    }).then(async (res) => {
+      const data = await readJson(res);
+      if (!res.ok) throw new Error(data.error || `Could not confirm payment (HTTP ${res.status})`);
+      setJobId(id); setName(""); setProgress(0);
+      timer.current = setInterval(() => poll(id), 3000);
+    }).catch((err) => { setError(err.message); setPhase("error"); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => () => { clearInterval(timer.current); if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -41,10 +61,12 @@ export default function Maker({ onLibrary }) {
     body.append("appearance", appearance.trim());
     body.append("name", name.trim());
     body.append("details", details.trim());
+    body.append("origin", window.location.origin);
     try {
       const res = await api("/api/books", { method: "POST", body });
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
+      if (data.checkoutUrl) { window.location.assign(data.checkoutUrl); return; }   // pay on Stripe, then come back
       setJobId(data.id);
       setPhase("working");
       setProgress(0);
@@ -116,7 +138,11 @@ export default function Maker({ onLibrary }) {
           </label>
 
           {error && <p className="error">{error}</p>}
-          <button disabled={!canSubmit}>Create my book</button>
+          <p className="price">
+            Purchase book for <strong>${(cfg.priceCents / 100).toFixed(2)}</strong>
+            {cfg.avgCostCents != null && <> &mdash; average book costs <strong>${(cfg.avgCostCents / 100).toFixed(2)}</strong> to make</>}
+          </p>
+          <button disabled={!canSubmit}>Purchase book &mdash; ${(cfg.priceCents / 100).toFixed(2)}</button>
         </form>
       )}
 
