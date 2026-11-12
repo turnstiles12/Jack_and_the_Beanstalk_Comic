@@ -20,7 +20,7 @@ Visitors pass two pages before they can use the app, and every `/api/**` call (e
 
 Both steps are remembered in one signed, HttpOnly, SameSite=Lax cookie (30 days, `AuthTokens`). It is stateless, so deploys don't log anyone out. The signing key mixes `SESSION_SECRET` with the site password, so **changing `SITE_PASSWORD` signs everyone out**.
 
-Each finished book is written to `BOOKS_DIR/<sha256(google account id)>/` as `<id>.pdf`, `<id>.jpg` (thumbnail) and `<id>.json` (`BookStore`). Signing back in lists them under **My books** (download or delete). An account can only ever read its own folder. Photos are still never stored.
+Each Google account gets a row in `users` at sign-in (`UserStore`), and each finished book is a row in `books` (PDF + thumbnail as bytea, `BookStore`). Every query filters on the owner. Signing back in lists them under **My books** (download or delete). An account can only ever read its own rows. Photos are still never stored.
 
 | Env var | Purpose |
 |---|---|
@@ -28,7 +28,7 @@ Each finished book is written to `BOOKS_DIR/<sha256(google account id)>/` as `<i
 | `GOOGLE_CLIENT_ID` | OAuth *Web application* client id (public value) |
 | `SESSION_SECRET` | long random string that signs the cookie (Render generates one) |
 | `COOKIE_SECURE` | `true` on HTTPS (set in `render.yaml`) |
-| `BOOKS_DIR` | where books are saved; on Render a persistent disk at `/data/books` |
+| `DATABASE_URL` | Neon Postgres connection string (required). Tables `users`, `books`, `cost_stats` are created on first start |
 
 ### One-time Google setup
 1. Google Cloud Console > APIs & Services > **OAuth consent screen**: configure it (External is fine; add yourself as a test user until you publish it).
@@ -38,7 +38,7 @@ Each finished book is written to `BOOKS_DIR/<sha256(google account id)>/` as `<i
 
 ## Payment ($0.99 per book) and cost display
 - `POST /api/books` validates the form, holds it unpaid in memory and returns a Stripe Checkout URL. The browser pays on Stripe and returns to `/?book=<id>&session_id=...`; `POST /api/books/{id}/confirm` asks Stripe (`StripePayments`) whether that session is paid, for this book, this account and the right amount, and only then starts generation.
-- The form shows "Purchase book for $0.99 - average book costs $0.0X to make". The average comes from `CostTracker`: every image call and identity-check call a finished book needed (retries included) is priced at a per-call rate and the running total is saved in `BOOKS_DIR/cost-stats.json`. Providers don't return a dollar amount per call, so the rates are config (`IMAGE_CALL_COST_USD`, `VERIFY_CALL_COST_USD`; defaults per provider). Before the first book it shows an estimate.
+- The form shows "Purchase book for $0.99 - average book costs $0.0X to make". The average comes from `CostTracker`: every image call and identity-check call a finished book needed (retries included) is priced at a per-call rate and the running total is saved in the `cost_stats` table. Providers don't return a dollar amount per call, so the rates are config (`IMAGE_CALL_COST_USD`, `VERIFY_CALL_COST_USD`; defaults per provider). Before the first book it shows an estimate.
 - Env: `STRIPE_SECRET_KEY` (required; use `sk_test_...` first), optional `BOOK_PRICE_CENTS`, `APP_BASE_URL`. `STRIPE_PAYMENTS_DISABLED=true` skips payment for local development only.
 - Limitation: an unpaid/paid job lives in server memory, so a restart between paying and returning loses the book (the user is told to ask for a refund).
 

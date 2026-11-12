@@ -146,16 +146,20 @@ class AccessControlTest {
 
     // ---------- per-account storage ----------
 
+    /** Needs a real Postgres: set TEST_DATABASE_URL to a throwaway database (e.g. a Neon branch). Skipped otherwise. */
     @Test
     void booksAreSavedPerAccountAndNeverLeakAcrossAccounts() throws Exception {
-        Path dir = Files.createTempDirectory("books-test");
-        BookStore store = new BookStore(dir.toString());
+        String url = System.getenv("TEST_DATABASE_URL");
+        org.junit.jupiter.api.Assumptions.assumeTrue(url != null && !url.isBlank(), "TEST_DATABASE_URL not set");
+        javax.sql.DataSource ds = Db.build(url);
+        try (var c = ds.getConnection(); var st = c.createStatement()) { for (String ddl : Db.SCHEMA) st.execute(ddl); }
+        BookStore store = new BookStore(ds);
         String id = java.util.UUID.randomUUID().toString();
         byte[] pdf = "%PDF-fake".getBytes(StandardCharsets.UTF_8);
         store.save("google-sub-A", id, "Mason", pdf, new byte[]{1, 2, 3});
 
-        // "signing back in" = a brand new BookStore instance pointed at the same folder
-        BookStore later = new BookStore(dir.toString());
+        // "signing back in" = a brand new BookStore instance on the same database
+        BookStore later = new BookStore(ds);
         List<BookStore.Meta> mine = later.list("google-sub-A");
         assertEquals(1, mine.size());
         assertEquals("Mason", mine.get(0).name());

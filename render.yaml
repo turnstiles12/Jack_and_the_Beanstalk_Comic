@@ -6,11 +6,6 @@ services:
     plan: starter            # free tier (512 MB, sleeps when idle) can run out of memory / drop in-flight books
     healthCheckPath: /api/health
     autoDeployTrigger: commit
-    # Saved books live here. Without a disk they are lost on every deploy/restart. (Disks need a paid plan.)
-    disk:
-      name: books
-      mountPath: /data
-      sizeGB: 2
     envVars:
       - key: IMAGE_PROVIDER
         value: cloudflare    # cloudflare | openai | fal | mock
@@ -30,8 +25,8 @@ services:
         generateValue: true  # signs the login cookie; Render generates a random value once
       - key: COOKIE_SECURE
         value: "true"
-      - key: BOOKS_DIR
-        value: /data/books   # on the persistent disk above
+      - key: DATABASE_URL
+        sync: false          # Neon Postgres connection string; holds accounts, books and cost totals
       - key: IMAGE_PARALLELISM
         value: "2"
       - key: VERIFY_PROVIDER

@@ -14,7 +14,9 @@ public class AuthController {
 
     private final AuthService auth;
 
-    public AuthController(AuthService auth) { this.auth = auth; }
+    private final UserStore users;
+
+    public AuthController(AuthService auth, UserStore users) { this.auth = auth; this.users = users; }
 
     /** What the UI should show next: the password gate, the Google sign-in page, or the app. */
     @GetMapping("/status")
@@ -55,6 +57,7 @@ public class AuthController {
             return error(503, "Google sign-in has not been set up on the server yet.", null);
         try {
             GoogleIdTokenVerifier.GoogleUser u = auth.verifyGoogle(body.get("credential"));
+            users.upsert(u.sub(), u.email(), u.name(), u.picture());
             auth.write(res, true, u);
             return ResponseEntity.ok(userJson(u.email(), u.name(), u.picture()));
         } catch (GoogleIdTokenVerifier.InvalidTokenException e) {
