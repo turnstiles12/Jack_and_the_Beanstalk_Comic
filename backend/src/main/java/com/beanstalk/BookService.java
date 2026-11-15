@@ -36,11 +36,14 @@ public class BookService {
         public final String id = UUID.randomUUID().toString();
         public final String owner;     // Google account id (sub) that started this book
         public final String name;      // child's name, used for the download file name
+        public final Story story;      // which built-in template this book uses
         public volatile State state = State.AWAITING_PAYMENT;
         public volatile int pagesDone = 0;
         public volatile String error;
         public volatile byte[] pdf;
         public final long createdAt = System.currentTimeMillis();
+        public volatile long startedAt;    // when generation began (after payment)
+        public volatile long finishedAt;   // when the PDF was ready; 0 while running
         // Kept in memory until the book is paid for, then handed to the generator.
         volatile byte[] refJpeg;
         volatile String looks;
@@ -49,7 +52,13 @@ public class BookService {
         final java.util.concurrent.atomic.AtomicInteger imageCalls = new java.util.concurrent.atomic.AtomicInteger();
         final java.util.concurrent.atomic.AtomicInteger verifyCalls = new java.util.concurrent.atomic.AtomicInteger();
 
-        Job(String owner, String name) { this.owner = owner; this.name = name; }
+        Job(String owner, String name, Story story) { this.owner = owner; this.name = name; this.story = story; }
+
+        /** Milliseconds from "generation started" to "PDF ready" (or to now, while still running). */
+        public long elapsedMs() {
+            if (startedAt == 0) return 0;
+            return (finishedAt != 0 ? finishedAt : System.currentTimeMillis()) - startedAt;
+        }
     }
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BookService.class);
@@ -66,6 +75,8 @@ public class BookService {
 
     @Value("${beanstalk.image.seed}") private long seed;
     @Value("${beanstalk.image.max-attempts}") private int maxAttempts;
+    /** After this many seconds a page that already has an image stops retrying, so a book finishes in about a minute. */
+    @Value("${beanstalk.job.budget-seconds:45}") private int budgetSeconds;
 
     public BookService(ImageGenerator generator, PdfComposer composer, FaceVerifier verifier, BookStore store,
                        CostTracker costs, CharacterBibleStore bible,
@@ -82,7 +93,7 @@ public class BookService {
     public boolean usesPhoto() { return generator.usesPhoto(); }
 
     /** Validates the inputs and holds them in memory as an unpaid job. Nothing is generated until {@link #begin}. */
-    public Job prepare(String owner, byte[] photo, String name, String details, String appearance) throws Exception {
+    public Job prepare(String owner, byte[] photo, String name, String details, String appearance, Story story) throws Exception {
         boolean hasPhoto = photo != null && photo.length > 0;
         final byte[] refJpeg;
         final String looks;
@@ -105,7 +116,7 @@ public class BookService {
                 log.error("Could not save the reference photo to the character bible; continuing without it", e);
             }
         }
-        Job job = new Job(owner, name);
+        Job job = new Job(owner, name, story);
         job.refJpeg = refJpeg;
         job.looks = looks;
         job.details = details;
@@ -117,6 +128,7 @@ public class BookService {
     public void begin(Job job) {
         synchronized (job) {
             if (job.state != State.AWAITING_PAYMENT) return;
+            job.startedAt = System.currentTimeMillis();
             job.state = State.RUNNING;
         }
         final byte[] ref = job.refJpeg;
@@ -133,28 +145,32 @@ public class BookService {
 
     private void run(Job job, byte[] refJpeg, String looks, String name, String details) {
         try {
-            List<Storyboard.Page> all = new ArrayList<>(Storyboard.PAGES);
-            all.add(Storyboard.ABOUT_ME_PORTRAIT);
+            List<Storyboard.Page> all = job.story.allPages();
 
+            // All 20 pages are requested at once (pool size = beanstalk.image.parallelism), so the book takes about
+            // as long as the slowest single page instead of 20 pages one after another.
             List<Future<byte[]>> futures = new ArrayList<>();
             for (Storyboard.Page p : all) {
                 futures.add(pagePool.submit(() -> {
-                    byte[] img = generateWithRetry(job, p, refJpeg, looks);
-                    job.pagesDone++;
+                    byte[] img = Jpegs.ensure(generateWithRetry(job, p, refJpeg, looks));
+                    synchronized (job) { job.pagesDone++; }
                     return img;
                 }));
             }
             List<byte[]> images = new ArrayList<>();
             for (Future<byte[]> f : futures) images.add(f.get());   // order preserved: page 1..20
 
-            byte[] pdf = composer.compose(images, name, details);
+            byte[] pdf = composer.compose(images, name, details, job.story);
             try {
-                store.save(job.owner, job.id, name, pdf, thumbnail(images.get(0)));
+                store.save(job.owner, job.id, name, pdf, thumbnail(images.get(0)), job.story.id());
             } catch (Exception e) {
                 log.error("Could not save book {} to storage; keeping it in memory only", job.id, e);
                 job.pdf = pdf;      // the user can still download it now, it just won't be in their library
             }
+            job.finishedAt = System.currentTimeMillis();
             job.state = State.DONE;
+            log.info("Book {} ({}) finished in {} ms: {} image calls, {} identity checks",
+                    job.id, job.story.id(), job.elapsedMs(), job.imageCalls.get(), job.verifyCalls.get());
             costs.recordBook(job.imageCalls.get(), job.verifyCalls.get());
         } catch (Exception e) {
             job.error = rootMessage(e);
@@ -166,18 +182,20 @@ public class BookService {
     private byte[] generateWithRetry(Job job, Storyboard.Page p, byte[] refJpeg, String looks) throws Exception {
         Exception last = null;
         byte[] lastImg = null;
+        long deadline = job.startedAt + budgetSeconds * 1000L;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            if (attempt > 0 && System.currentTimeMillis() >= deadline) break;   // out of time: keep what we have
             try {
                 byte[] img = generator.generate(p, refJpeg, looks, seed + attempt);
                 lastImg = img;
                 job.imageCalls.incrementAndGet();
-                boolean others = p.number() == 1 || p.number() == 14 || p.number() == 19;
+                boolean others = job.story != Stories.JACK || p.number() == 1 || p.number() == 14 || p.number() == 19;   // other people on the page
                 if (refJpeg == null) return img;
                 if (verifier.active()) job.verifyCalls.incrementAndGet();
                 if (verifier.sameChild(refJpeg, img, others)) return img;
             } catch (Exception e) {
                 last = e;
-                Thread.sleep(1500L * (attempt + 1));
+                Thread.sleep(400L * (attempt + 1));
             }
         }
         if (lastImg != null) return lastImg;   // checker kept saying no; ship best effort rather than fail the book

@@ -28,8 +28,8 @@ public class OpenAiImageGenerator implements ImageGenerator {
 
     /** Fixed prefix, identical on every call. The fixed STYLE sentence stays last, untouched. */
     static final String REFERENCE_INSTRUCTION =
-            "Create a brand-new storybook illustration. The child in the provided photo is the character Jack: "
-          + "keep his exact face, hair and skin tone recognisable. Do not reuse the photo's background or clothing.";
+            "Create a brand-new storybook illustration. The child in the provided photo is the main character of the story: "
+          + "keep their exact face, hair and skin tone recognisable. Do not reuse the photo's background or clothing.";
 
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();

@@ -26,7 +26,7 @@ export default function Library({ onNew }) {
   }
 
   async function download(b) {
-    try { await downloadPdf(b.id, b.name); } catch (err) { setError(err.message); }
+    try { await downloadPdf(b.id, b.name, b.storyTitle); } catch (err) { setError(err.message); }
   }
 
   if (books === null) return <p className="sub">Loading your books…</p>;
@@ -48,6 +48,7 @@ export default function Library({ onNew }) {
                 onError={(e) => { e.currentTarget.style.visibility = "hidden"; }} />
               <div className="book-info">
                 <strong>{b.name}</strong>
+                {b.storyTitle && <span className="hint">{b.storyTitle}</span>}
                 <span className="hint">{new Date(b.createdAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}</span>
                 <div className="row">
                   <button onClick={() => download(b)}>Download PDF</button>

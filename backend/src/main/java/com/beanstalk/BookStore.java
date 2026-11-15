@@ -19,7 +19,7 @@ import java.util.regex.Pattern;
 @Service
 public class BookStore {
 
-    public record Meta(String id, String name, long createdAt) {}
+    public record Meta(String id, String name, long createdAt, String story) {}
 
     private static final Pattern ID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
 
@@ -27,18 +27,24 @@ public class BookStore {
 
     public BookStore(DataSource db) { this.db = db; }
 
+    /** Saves a Jack and the Beanstalk book (the default story). */
     public void save(String owner, String id, String name, byte[] pdf, byte[] thumbJpeg) throws SQLException {
+        save(owner, id, name, pdf, thumbJpeg, Stories.JACK.id());
+    }
+
+    public void save(String owner, String id, String name, byte[] pdf, byte[] thumbJpeg, String story) throws SQLException {
         requireId(id);
         requireOwner(owner);
         try (Connection c = db.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "INSERT INTO books (id, owner, name, created_at, pdf, thumb) VALUES (?::uuid, ?, ?, ?, ?, ?)")) {
+                     "INSERT INTO books (id, owner, name, created_at, pdf, thumb, story) VALUES (?::uuid, ?, ?, ?, ?, ?, ?)")) {
             ps.setString(1, id);
             ps.setString(2, owner);
             ps.setString(3, name);
             ps.setLong(4, System.currentTimeMillis());
             ps.setBytes(5, pdf);
             ps.setBytes(6, thumbJpeg);
+            ps.setString(7, story);
             ps.executeUpdate();
         }
     }
@@ -47,11 +53,11 @@ public class BookStore {
         requireOwner(owner);
         try (Connection c = db.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT id::text, name, created_at FROM books WHERE owner = ? ORDER BY created_at DESC")) {
+                     "SELECT id::text, name, created_at, story FROM books WHERE owner = ? ORDER BY created_at DESC")) {
             ps.setString(1, owner);
             List<Meta> out = new ArrayList<>();
             try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) out.add(new Meta(rs.getString(1), rs.getString(2), rs.getLong(3)));
+                while (rs.next()) out.add(new Meta(rs.getString(1), rs.getString(2), rs.getLong(3), rs.getString(4)));
             }
             return out;
         } catch (SQLException e) {
@@ -64,11 +70,11 @@ public class BookStore {
         if (!validId(id)) return Optional.empty();
         try (Connection c = db.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT id::text, name, created_at FROM books WHERE owner = ? AND id = ?::uuid")) {
+                     "SELECT id::text, name, created_at, story FROM books WHERE owner = ? AND id = ?::uuid")) {
             ps.setString(1, owner);
             ps.setString(2, id);
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? Optional.of(new Meta(rs.getString(1), rs.getString(2), rs.getLong(3))) : Optional.empty();
+                return rs.next() ? Optional.of(new Meta(rs.getString(1), rs.getString(2), rs.getLong(3), rs.getString(4))) : Optional.empty();
             }
         } catch (SQLException e) {
             return Optional.empty();

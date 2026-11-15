@@ -37,13 +37,14 @@ export async function postJson(url, body) {
 }
 
 // Download a PDF from the (cookie-protected) API as a file.
-export async function downloadPdf(id, name) {
+export async function downloadPdf(id, name, storyTitle) {
   const res = await api(`/api/books/${id}/pdf`);
   if (!res.ok) throw new Error("Could not download the book. It may have been deleted.");
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement("a");
   a.href = url;
-  a.download = `Jack-and-the-Beanstalk-${(name || "My").replace(/[^\w-]+/g, "_")}.pdf`;
+  const slug = (storyTitle || "Jack and the Beanstalk").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  a.download = `${slug}-${(name || "My").replace(/[^\w-]+/g, "_")}.pdf`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }

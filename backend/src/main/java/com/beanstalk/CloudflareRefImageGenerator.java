@@ -35,8 +35,8 @@ public class CloudflareRefImageGenerator implements ImageGenerator {
 
     /** Fixed prefix, identical on every call. The fixed STYLE sentence stays last, untouched. */
     static final String REFERENCE_INSTRUCTION =
-            "Create a brand-new storybook illustration. The child in image 1 is the character Jack: "
-          + "keep his exact face, hair and skin tone recognisable. Do not reuse the background or clothing of image 1.";
+            "Create a brand-new storybook illustration. The child in image 1 is the main character of the story: "
+          + "keep their exact face, hair and skin tone recognisable. Do not reuse the background or clothing of image 1.";
 
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();
@@ -48,6 +48,7 @@ public class CloudflareRefImageGenerator implements ImageGenerator {
     @Value("${beanstalk.cloudflare.ref-width:1024}") int width;
     @Value("${beanstalk.cloudflare.ref-height:1536}") int height;
     @Value("${beanstalk.cloudflare.ref-max-side:480}") int refMaxSide;
+    @Value("${beanstalk.cloudflare.timeout-seconds:40}") int timeoutSeconds;
 
     @Override
     public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception {
@@ -64,7 +65,7 @@ public class CloudflareRefImageGenerator implements ImageGenerator {
         body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
         HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/accounts/" + accountId + "/ai/run/" + model))
-                .timeout(Duration.ofMinutes(3))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Authorization", "Bearer " + token)
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))

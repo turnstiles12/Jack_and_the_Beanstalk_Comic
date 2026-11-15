@@ -41,3 +41,11 @@ button.danger { color: #b3261e; }
 .empty { text-align: center; display: grid; gap: 12px; padding: 16px 0; }
 
 .price { margin: 12px 0 8px; text-align: center; color: #444; }
+
+/* story picker */
+.stories { border: 0; padding: 0; margin: 0 0 1rem; display: flex; gap: .6rem; flex-wrap: wrap; }
+.stories legend { font-weight: 600; margin-bottom: .4rem; padding: 0; }
+.story { flex: 1 1 10rem; display: flex; align-items: center; gap: .5rem; padding: .7rem .9rem; border: 2px solid #cfd8c8;
+  border-radius: 12px; cursor: pointer; background: #fff; }
+.story.on { border-color: #2f6b3a; background: #eef6ea; }
+.story input { width: auto; margin: 0; }

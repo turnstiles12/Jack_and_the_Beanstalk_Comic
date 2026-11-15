@@ -14,8 +14,27 @@ export default function Maker({ onLibrary }) {
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState(null);
   const [appearance, setAppearance] = useState("");
-  const [cfg, setCfg] = useState({ usesPhoto: true, needsAppearance: false, priceCents: 99, avgCostCents: null });
+  const [story, setStory] = useState("jack");
+  const [elapsed, setElapsed] = useState(0);        // seconds since generation started, shown while painting
+  const [tookMs, setTookMs] = useState(null);       // server-measured generation time, shown when done
+  const [cfg, setCfg] = useState({
+    usesPhoto: true, needsAppearance: false, priceCents: 99, avgCostCents: null,
+    stories: [{ id: "jack", title: "Jack and the Beanstalk" }, { id: "red", title: "Little Red Riding Hood" }],
+  });
   const timer = useRef(null);
+  const clock = useRef(null);
+  const stories = cfg.stories || [];
+  const storyTitle = stories.find((s) => s.id === story)?.title || "Jack and the Beanstalk";
+
+  function startPolling(id) {
+    setProgress(0); setElapsed(0); setTookMs(null);
+    const t0 = Date.now();
+    clearInterval(clock.current);
+    clock.current = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 500);
+    clearInterval(timer.current);
+    timer.current = setInterval(() => poll(id), 1000);
+  }
+  function stopPolling() { clearInterval(timer.current); clearInterval(clock.current); }
 
   useEffect(() => {
     api("/api/config").then(readJson).then(setCfg).catch(() => {});
@@ -35,13 +54,13 @@ export default function Maker({ onLibrary }) {
     }).then(async (res) => {
       const data = await readJson(res);
       if (!res.ok) throw new Error(data.error || `Could not confirm payment (HTTP ${res.status})`);
-      setJobId(id); setName(""); setProgress(0);
-      timer.current = setInterval(() => poll(id), 3000);
+      setJobId(id); setName("");
+      startPolling(id);
     }).catch((err) => { setError(err.message); setPhase("error"); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => () => { clearInterval(timer.current); if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  useEffect(() => () => { stopPolling(); if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   function onPick(e) {
     const f = e.target.files?.[0];
@@ -62,6 +81,7 @@ export default function Maker({ onLibrary }) {
     body.append("name", name.trim());
     body.append("details", details.trim());
     body.append("origin", window.location.origin);
+    body.append("story", story);
     try {
       const res = await api("/api/books", { method: "POST", body });
       const data = await readJson(res);
@@ -69,8 +89,7 @@ export default function Maker({ onLibrary }) {
       if (data.checkoutUrl) { window.location.assign(data.checkoutUrl); return; }   // pay on Stripe, then come back
       setJobId(data.id);
       setPhase("working");
-      setProgress(0);
-      timer.current = setInterval(() => poll(data.id), 3000);
+      startPolling(data.id);
     } catch (err) {
       setError(err.message);
     }
@@ -82,15 +101,16 @@ export default function Maker({ onLibrary }) {
       if (res.status === 404) throw new Error("The server restarted and lost your book. Please try again.");
       const s = await readJson(res);
       setProgress(s.pagesDone);
-      if (s.state === "DONE") { clearInterval(timer.current); setPhase("done"); }
-      if (s.state === "FAILED") { clearInterval(timer.current); setError(s.error || "Generation failed."); setPhase("error"); }
+      if (s.story) setStory(s.story);
+      if (s.state === "DONE") { stopPolling(); setTookMs(s.elapsedMs || null); setPhase("done"); }
+      if (s.state === "FAILED") { stopPolling(); setError(s.error || "Generation failed."); setPhase("error"); }
     } catch (err) {
-      clearInterval(timer.current); setError(err.message); setPhase("error");
+      stopPolling(); setError(err.message); setPhase("error");
     }
   }
 
   async function download() {
-    try { await downloadPdf(jobId, name.trim()); } catch (err) { setError(err.message); }
+    try { await downloadPdf(jobId, name.trim(), storyTitle); } catch (err) { setError(err.message); }
   }
 
   function reset() { setPhase("form"); setError(""); setJobId(null); }
@@ -99,11 +119,22 @@ export default function Maker({ onLibrary }) {
 
   return (
     <main className="card">
-      <h1>Jack and the Beanstalk</h1>
-      <p className="sub">A 20-page storybook starring your child.</p>
+      <h1>{storyTitle}</h1>
+      <p className="sub">A 20-page storybook starring your child, ready in about a minute.</p>
 
       {phase === "form" && (
         <form onSubmit={onSubmit}>
+          <fieldset className="stories">
+            <legend>Choose a story</legend>
+            {stories.map((s) => (
+              <label key={s.id} className={s.id === story ? "story on" : "story"}>
+                <input type="radio" name="story" value={s.id} checked={s.id === story}
+                  onChange={() => setStory(s.id)} />
+                <span>{s.title}</span>
+              </label>
+            ))}
+          </fieldset>
+
           {cfg.usesPhoto && (<>
             <label className="drop">
               {preview ? <img src={preview} alt="Chosen child" /> : <span>Choose a reference image (one clear, front-facing photo)</span>}
@@ -116,7 +147,7 @@ export default function Maker({ onLibrary }) {
             <label>How does your child look? <span className="count">{appearance.length}/150</span>
               <input value={appearance} maxLength={150} onChange={(e) => setAppearance(e.target.value)}
                 placeholder="e.g. short curly brown hair, brown eyes, freckles, light-tan skin" required />
-              <span className="hint">This text model can't see photos, so Jack is drawn from this description.
+              <span className="hint">This text model can't see photos, so the hero is drawn from this description.
                 The face will be similar from page to page but not an exact likeness.</span>
             </label>
           )}
@@ -148,14 +179,20 @@ export default function Maker({ onLibrary }) {
 
       {phase === "working" && (
         <div className="status">
-          <p>Painting page {Math.min(progress + 1, 20)} of 20… this takes a few minutes.</p>
+          <p>
+            {progress >= 20
+              ? "Putting the pages together into your PDF…"
+              : `Painting your pages: ${progress} of 20 done`}
+            {" "}({elapsed}s)
+          </p>
           <progress max="20" value={progress} />
+          <p className="hint">Usually under a minute.</p>
         </div>
       )}
 
       {phase === "done" && (
         <div className="status">
-          <p>Your book is ready, and it's saved in My books.</p>
+          <p>Your book is ready{tookMs ? ` (made in ${Math.round(tookMs / 1000)} seconds)` : ""}, and it's saved in My books.</p>
           <button onClick={download}>Download PDF</button>
           <button className="link" onClick={onLibrary}>View my books</button>
           <button className="link" onClick={reset}>Make another</button>

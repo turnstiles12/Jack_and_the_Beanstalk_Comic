@@ -54,6 +54,8 @@ public class Db {
         "CREATE TABLE IF NOT EXISTS books (id uuid PRIMARY KEY, owner text NOT NULL, name text NOT NULL, created_at bigint NOT NULL,"
             + " pdf bytea NOT NULL, thumb bytea)",
         "CREATE INDEX IF NOT EXISTS books_owner_created ON books (owner, created_at DESC)",
+        // Which built-in story a saved book uses (older rows are all Jack).
+        "ALTER TABLE books ADD COLUMN IF NOT EXISTS story text NOT NULL DEFAULT 'jack'",
         "CREATE TABLE IF NOT EXISTS cost_stats (id int PRIMARY KEY CHECK (id = 1), books bigint NOT NULL DEFAULT 0,"
             + " total_usd double precision NOT NULL DEFAULT 0)",
         "INSERT INTO cost_stats (id) VALUES (1) ON CONFLICT DO NOTHING",

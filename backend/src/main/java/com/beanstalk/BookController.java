@@ -31,7 +31,10 @@ public class BookController {
     @GetMapping("/api/config")
     public Map<String, Object> config() {
         boolean photo = books.usesPhoto();
+        List<Map<String, String>> stories = Stories.ALL.stream()
+                .map(s -> Map.of("id", s.id(), "title", s.title())).toList();
         return Map.of("usesPhoto", photo, "needsAppearance", !photo,
+                "stories", stories,
                 "priceCents", stripe.priceCents(),
                 "avgCostCents", Math.round(costs.averageUsd() * 10000) / 100.0,   // e.g. 3.0 = $0.03
                 "booksMade", costs.books());
@@ -47,7 +50,11 @@ public class BookController {
                                     @RequestParam("name") String name,
                                     @RequestParam(value = "details", defaultValue = "") String details,
                                     @RequestParam(value = "appearance", defaultValue = "") String appearance,
-                                    @RequestParam(value = "origin", defaultValue = "") String origin) {
+                                    @RequestParam(value = "origin", defaultValue = "") String origin,
+                                    @RequestParam(value = "story", defaultValue = "") String storyId) {
+        Story story = Stories.find(storyId);
+        if (story == null)
+            return ResponseEntity.badRequest().body(Map.of("error", "Please choose one of the built-in stories."));
         if (!stripe.paymentsDisabled() && !stripe.configured())
             return ResponseEntity.status(503).body(Map.of("error", "Payments are not set up on the server yet."));
         appearance = appearance.strip();
@@ -62,7 +69,7 @@ public class BookController {
         String base = appBaseUrl.isBlank() ? origin.strip() : appBaseUrl.strip();
         base = base.replaceAll("/+$", "");
         try {
-            BookService.Job job = books.prepare(user.sub(), photo == null ? null : photo.getBytes(), name, details, appearance);
+            BookService.Job job = books.prepare(user.sub(), photo == null ? null : photo.getBytes(), name, details, appearance, story);
             if (stripe.paymentsDisabled()) {            // local development only (STRIPE_PAYMENTS_DISABLED=true)
                 books.begin(job);
                 return ResponseEntity.accepted().body(Map.of("id", job.id));
@@ -102,7 +109,8 @@ public class BookController {
     @GetMapping("/api/books")
     public List<Map<String, Object>> list(@RequestAttribute(AuthFilter.USER) AuthSession user) {
         return store.list(user.sub()).stream()
-                .<Map<String, Object>>map(m -> Map.of("id", m.id(), "name", m.name(), "createdAt", m.createdAt()))
+                .<Map<String, Object>>map(m -> Map.of("id", m.id(), "name", m.name(), "createdAt", m.createdAt(),
+                        "story", m.story(), "storyTitle", storyTitle(m.story())))
                 .toList();
     }
 
@@ -112,13 +120,16 @@ public class BookController {
         if (j == null) {
             // Not in memory any more (swept or restarted) - but it may already be saved on the account.
             if (store.meta(user.sub(), id).isPresent())
-                return ResponseEntity.ok(Map.of("state", "DONE", "pagesDone", 20, "totalPages", 20, "error", ""));
+                return ResponseEntity.ok(Map.of("state", "DONE", "pagesDone", Story.PAGE_COUNT,
+                        "totalPages", Story.PAGE_COUNT, "elapsedMs", 0, "error", ""));
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(Map.of(
                 "state", j.state.name(),
                 "pagesDone", j.pagesDone,
-                "totalPages", 20,
+                "totalPages", Story.PAGE_COUNT,
+                "elapsedMs", j.elapsedMs(),
+                "story", j.story.id(),
                 "error", j.error == null ? "" : j.error));
     }
 
@@ -126,21 +137,29 @@ public class BookController {
     public ResponseEntity<byte[]> pdf(@RequestAttribute(AuthFilter.USER) AuthSession user, @PathVariable String id) {
         byte[] data = null;
         String name = "My";
+        Story story = Stories.JACK;
         Optional<BookStore.Meta> meta = store.meta(user.sub(), id);
         if (meta.isPresent()) {
             data = store.pdf(user.sub(), id).orElse(null);
             name = meta.get().name();
+            Story saved = Stories.find(meta.get().story());
+            if (saved != null) story = saved;
         } else {
             BookService.Job j = books.get(user.sub(), id);      // saved-to-disk failed: still served from memory
-            if (j != null && j.state == BookService.State.DONE && j.pdf != null) { data = j.pdf; name = j.name; }
+            if (j != null && j.state == BookService.State.DONE && j.pdf != null) { data = j.pdf; name = j.name; story = j.story; }
         }
         if (data == null) return ResponseEntity.notFound().build();
         String safe = name.replaceAll("[^A-Za-z0-9_-]", "_");
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_PDF)
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"Jack-and-the-Beanstalk-" + safe + ".pdf\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + story.fileSlug() + "-" + safe + ".pdf\"")
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                 .body(data);
+    }
+
+    private static String storyTitle(String id) {
+        Story s = Stories.find(id);
+        return s == null ? "" : s.title();
     }
 
     @GetMapping("/api/books/{id}/thumb")

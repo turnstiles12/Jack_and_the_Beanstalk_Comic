@@ -32,8 +32,14 @@ public class PdfComposer {
     private record Para(String text, float size, float spaceAfter) {}
     private record Line(String text, float size, float width) {}
 
+    /** Jack and the Beanstalk (kept for callers that do not choose a story). */
     public byte[] compose(List<byte[]> images, String childName, String details) throws IOException {
-        if (images.size() != 20) throw new IllegalArgumentException("Need exactly 20 images, got " + images.size());
+        return compose(images, childName, details, Stories.JACK);
+    }
+
+    public byte[] compose(List<byte[]> images, String childName, String details, Story story) throws IOException {
+        if (images.size() != Story.PAGE_COUNT)
+            throw new IllegalArgumentException("Need exactly " + Story.PAGE_COUNT + " images, got " + images.size());
 
         java.awt.image.BufferedImage first = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(images.get(0)));
         if (first == null) throw new IOException("Page 1 image is not a readable JPEG/PNG");
@@ -46,11 +52,11 @@ public class PdfComposer {
                 font = PDType0Font.load(doc, in);
             }
             PDDocumentInformation info = new PDDocumentInformation();
-            info.setTitle("Jack and the Beanstalk — starring " + clean(font, childName));
+            info.setTitle(story.title() + " — starring " + clean(font, childName));
             doc.setDocumentInformation(info);
 
-            // Pages 1-19: story pages, text exactly as hard-coded in the storyboard.
-            for (Storyboard.Page p : Storyboard.PAGES) {
+            // Pages 1-19: story pages, text exactly as hard-coded in the story template.
+            for (Storyboard.Page p : story.pages()) {
                 PDPage page = new PDPage(size);
                 doc.addPage(page);
                 try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
@@ -73,7 +79,7 @@ public class PdfComposer {
                 drawPanel(cs, font, paras, Storyboard.Zone.BOTTOM, 0.46f, size);
             }
 
-            if (doc.getNumberOfPages() != 20) throw new IllegalStateException("PDF must have 20 pages");
+            if (doc.getNumberOfPages() != Story.PAGE_COUNT) throw new IllegalStateException("PDF must have 20 pages");
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             doc.save(out);
             return out.toByteArray();

@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * Optional consistency gate (beanstalk.verify.provider = none | openai | anthropic).
- * Shows a vision model the reference photo + a generated page and asks whether Jack plausibly has the same
+ * Shows a vision model the reference photo + a generated page and asks whether the main character plausibly has the same
  * face. A "no" makes BookService regenerate the page. Fails OPEN (returns true) on any API error so the
  * checker can never block a book. This is a coarse sanity check, not a biometric match.
  */
@@ -44,9 +44,9 @@ public class FaceVerifier {
     public boolean sameChild(byte[] referenceJpeg, byte[] pageImage, boolean pageHasOtherPeople) {
         try {
             String q = "Image 1 is a photo of a real child. Image 2 is a 3D-animated storybook illustration "
-                     + "whose main boy character, 'Jack', must look like that same child (face shape, eyes, "
+                     + "whose main child character must look like that same child (face shape, eyes, "
                      + "hair colour and style, skin tone, apparent age). "
-                     + (pageHasOtherPeople ? "Other characters may appear; judge only Jack, the child. " : "")
+                     + (pageHasOtherPeople ? "Other characters may appear; judge only the main child character. " : "")
                      + "Reply with JSON only: {\"same_child\": true} or {\"same_child\": false}.";
             String answer = switch (provider == null ? "none" : provider.toLowerCase()) {
                 case "openai" -> askOpenAi(q, referenceJpeg, pageImage);

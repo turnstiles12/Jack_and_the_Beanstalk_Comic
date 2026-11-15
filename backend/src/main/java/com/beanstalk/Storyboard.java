@@ -55,8 +55,8 @@ public final class Storyboard {
         }
     }
 
-    private static final String LOWER = "The lower third of the image is calm, uncluttered and softly lit.";
-    private static final String UPPER = "The top third of the image is calm, open and uncluttered.";
+    static final String LOWER = "The lower third of the image is calm, uncluttered and softly lit.";
+    static final String UPPER = "The top third of the image is calm, open and uncluttered.";
 
     public static final List<Page> PAGES = List.of(
         new Page(1, "The Empty Cupboard",

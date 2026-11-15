@@ -45,7 +45,23 @@ final class CharacterBibleSeed {
             ""),
         new Entry("golden-harp", "The golden harp", "Magic object",
             "A small magical golden harp with a gentle glowing face that sings by itself.",
-            "")
+            ""),
+        // ---- Little Red Riding Hood template ----
+        new Entry("red", "Red", "Hero (Little Red Riding Hood)",
+            RedRidingHood.RED,
+            "bright red hooded cloak, cream blouse, mossy-green vest, brown trousers, sturdy brown boots"),
+        new Entry("red-mother", "Red's mother", "Supporting",
+            "A kind mother with a warm smile in a green apron.",
+            "green apron"),
+        new Entry("grandmother", "Grandmother", "Supporting",
+            "A sweet grandmother with silver hair in a bun, round spectacles and a lilac shawl.",
+            "lilac shawl"),
+        new Entry("wolf", "The wolf", "Antagonist",
+            "A tall grey wolf with a long muzzle, amber eyes and a sly toothy grin.",
+            ""),
+        new Entry("woodcutter", "The woodcutter", "Supporting",
+            "A burly woodcutter with a bushy brown beard, a red-checked shirt and a felling axe.",
+            "red-checked shirt")
     };
 
     static void seedTemplate(Connection c) throws SQLException {
