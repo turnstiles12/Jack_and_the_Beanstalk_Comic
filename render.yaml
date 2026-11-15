@@ -28,7 +28,7 @@ services:
       - key: DATABASE_URL
         sync: false          # Neon Postgres connection string; holds accounts, books and cost totals
       - key: IMAGE_PARALLELISM
-        value: "20"          # all 20 pages at once: a book finishes in well under 60 s
+        value: "8"           # 8 pages at a time (about 3 waves); more needs more RAM than the Starter plan has
       - key: JOB_BUDGET_SECONDS
         value: "45"          # after this a page stops retrying and keeps its best image
       - key: VERIFY_PROVIDER

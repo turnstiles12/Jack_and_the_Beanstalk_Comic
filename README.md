@@ -2,7 +2,7 @@
 
 ## Stories and speed
 - Two built-in templates, chosen on the form (`story` field of `POST /api/books`: `jack` or `red`; default `jack`). Both are one layout: 19 story pages plus the About Me page, with the same text zone on every page number. Jack is in `Storyboard.java`, Red in `RedRidingHood.java`, registered in `Stories.java`. Saved books remember their story (`books.story`).
-- Speed target: under 60 seconds from payment confirmed to PDF ready. All 20 pages are requested at once (`IMAGE_PARALLELISM=20`), a single image request times out after 40 s (`CLOUDFLARE_TIMEOUT_SECONDS`), a page stops retrying once `JOB_BUDGET_SECONDS` (45) has passed and keeps its best image, and each page is converted to JPEG on its worker thread so the PDF step is fast. The server logs `finished in N ms` per book and the UI shows the measured time. **This has not been timed against the live Cloudflare service yet; check the log line on the first real run.**
+- Speed target: under 60 seconds from payment confirmed to PDF ready. Pages are requested 8 at a time (`IMAGE_PARALLELISM=8`; 20 at once ran the 512 MB server out of memory), a single image request times out after 40 s (`CLOUDFLARE_TIMEOUT_SECONDS`), a page stops retrying once `JOB_BUDGET_SECONDS` (45) has passed and keeps its best image, and each page is converted to JPEG on its worker thread so the PDF step is fast. The server logs `finished in N ms` per book and the UI shows the measured time. **This has not been timed against the live Cloudflare service yet; check the log line on the first real run.**
 
 
 ## Architecture
