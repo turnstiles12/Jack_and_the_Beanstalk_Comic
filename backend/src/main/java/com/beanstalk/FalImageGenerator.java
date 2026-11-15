@@ -32,13 +32,18 @@ public class FalImageGenerator implements ImageGenerator {
     @Value("${beanstalk.image.height}") private int height;
     @Value("${beanstalk.image.steps}") private int steps;
     @Value("${beanstalk.image.id-weight}") private double idWeight;
+    @Value("${beanstalk.fal.timeout-seconds:60}") private int timeoutSeconds;
+    @Value("${beanstalk.fal.ref-max-side:768}") private int refMaxSide;
 
     @Override
     public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception {
-        String referenceDataUri = "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(referenceJpeg);
         if (apiKey == null || apiKey.isBlank()) {
             throw new IllegalStateException("FAL_KEY environment variable is not set");
         }
+        if (referenceJpeg == null) throw new IllegalArgumentException("fal/PuLID needs the uploaded photo");
+        // Same bytes on every page, so the identity is identical across all 20 calls.
+        byte[] ref = CloudflareRefImageGenerator.shrink(referenceJpeg, refMaxSide);
+        String referenceDataUri = "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(ref);
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("prompt", page.prompt(looks));                 // scene + quiet zone + fixed STYLE (last)
@@ -51,9 +56,10 @@ public class FalImageGenerator implements ImageGenerator {
         body.put("id_weight", idWeight);
         body.put("seed", seed);
         body.put("max_sequence_length", "256");             // scene prompts are long
+        body.put("enable_safety_checker", false);           // fal.ai safety checker explicitly disabled
 
         HttpRequest req = HttpRequest.newBuilder(URI.create(endpoint))
-                .timeout(Duration.ofMinutes(4))
+                .timeout(Duration.ofSeconds(timeoutSeconds))
                 .header("Authorization", "Key " + apiKey)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))

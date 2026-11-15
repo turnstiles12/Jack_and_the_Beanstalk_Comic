@@ -10,7 +10,7 @@
 |---|---|
 | Frontend | React 18 + Vite (`frontend/`) — upload photo, name, "About me", polls progress, downloads PDF |
 | Backend | Java 17, Spring Boot 3.3 (`backend/`) — async job per book; finished books saved per Google account on disk |
-| Image API | **Cloudflare Workers AI FLUX.2 klein** by default (`IMAGE_PROVIDER=cloudflare-ref`: the uploaded reference image is sent with every page). `cloudflare` is the text-only `flux-1-schnell` option (square, no photo). Selectable with `IMAGE_PROVIDER`: `openai` (photo-based edits), `fal` (FLUX + PuLID face lock), `mock` (free placeholders) |
+| Image API | **fal.ai FLUX + PuLID** by default (`IMAGE_PROVIDER=fal`, needs `FAL_KEY`): the same photo, seed and settings go with every page for a locked face, and requests are sent with `enable_safety_checker: false`. Selectable with `IMAGE_PROVIDER`: `cloudflare-ref` (FLUX.2 klein with reference image), `cloudflare` (text-only), `openai` (photo-based edits), `mock` (free placeholders) |
 | PDF | Apache PDFBox 3 — full-bleed images + real PDF text drawn on a translucent panel |
 | Optional QA | `FaceVerifier` (`VERIFY_PROVIDER=openai|anthropic`) asks a vision model if Jack matches the photo; "no" => regenerate |
 | Hosting | Render web service from the root `Dockerfile` (one container serves API + built React app) |
