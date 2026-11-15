@@ -13,6 +13,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 /**
  * fal.ai "flux-pulid": FLUX with PuLID identity injection. The SAME reference image goes into
@@ -34,6 +35,15 @@ public class FalImageGenerator implements ImageGenerator {
     @Value("${beanstalk.image.id-weight}") private double idWeight;
     @Value("${beanstalk.fal.timeout-seconds:60}") private int timeoutSeconds;
     @Value("${beanstalk.fal.ref-max-side:768}") private int refMaxSide;
+    /** fal.ai caps concurrent requests per account (10 here). Shared by every book being made at once. */
+    @Value("${beanstalk.fal.max-concurrent:8}") private int maxConcurrent;
+    private volatile Semaphore slots;
+
+    private Semaphore slots() {
+        Semaphore s = slots;
+        if (s == null) synchronized (this) { if ((s = slots) == null) slots = s = new Semaphore(Math.max(1, maxConcurrent), true); }
+        return s;
+    }
 
     @Override
     public byte[] generate(Storyboard.Page page, byte[] referenceJpeg, String looks, long seed) throws Exception {
@@ -65,7 +75,17 @@ public class FalImageGenerator implements ImageGenerator {
                 .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(body)))
                 .build();
 
-        HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+        // Never exceed fal's concurrent-request cap; if it still answers 429, wait and try again (not a failed attempt).
+        HttpResponse<String> res;
+        int busy = 0;
+        while (true) {
+            Semaphore gate = slots();
+            gate.acquire();
+            try { res = http.send(req, HttpResponse.BodyHandlers.ofString()); }
+            finally { gate.release(); }
+            if (res.statusCode() != 429 || ++busy > 8) break;
+            Thread.sleep(1000L + 700L * busy);
+        }
         if (res.statusCode() / 100 != 2) {
             throw new RuntimeException("fal.ai HTTP " + res.statusCode() + ": " + res.body());
         }
