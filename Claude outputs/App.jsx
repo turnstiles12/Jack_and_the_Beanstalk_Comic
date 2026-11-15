@@ -121,7 +121,7 @@ export default function App() {
           )}
 
           <label>Child's name (for the file name)
-            <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mason" required />
+            <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="e.g. Jack" required />
           </label>
 
 

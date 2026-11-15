@@ -241,7 +241,7 @@ export default function Maker({ onLibrary }) {
 
             <label className="field">
               <span className="field-label">Your name</span>
-              <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mason" required />
+              <input value={name} maxLength={30} onChange={(e) => setName(e.target.value)} placeholder="e.g. Jack" required />
             </label>
 
             <label className="field">
