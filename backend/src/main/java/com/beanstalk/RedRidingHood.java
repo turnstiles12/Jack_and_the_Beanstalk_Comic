@@ -27,7 +27,7 @@ public final class RedRidingHood {
 
     private static final String MOTHER = "their kind mother, a woman with a warm smile in a green apron";
     private static final String GRANDMA = "a sweet grandmother with silver hair in a bun, round spectacles and a lilac shawl";
-    private static final String WOLF = "a tall grey wolf with a long muzzle, amber eyes and a sly toothy grin";
+    private static final String WOLF = "a tall grey wolf with a long muzzle, amber eyes and a cheeky grin";
     private static final String WOODCUTTER = "a burly woodcutter with a bushy brown beard, a red-checked shirt and a felling axe";
 
     /** Characters sit in the upper two thirds when the text panel is at the bottom, and vice versa. */
@@ -68,7 +68,7 @@ public final class RedRidingHood {
 
         new Storyboard.Page(6, "A Meadow of Flowers",
             RED + ", standing at the edge of a bright meadow full of red poppies and yellow daisies, "
-          + "looking at the flowers with delight, while " + WOLF + " gestures toward the meadow with a sly smile." + LOW,
+          + "looking at the flowers with delight, while " + WOLF + " gestures toward the meadow with a playful smile." + LOW,
             UPPER,
             "Why not pick Grandmother some flowers? the wolf suggested with a toothy smile.", TOP),
 
@@ -80,13 +80,13 @@ public final class RedRidingHood {
 
         new Storyboard.Page(8, "Knock Knock",
             "A small stone cottage deep in the woods with a round wooden door and flower boxes. "
-          + WOLF + " stands at the door with one paw raised to knock, glancing about slyly." + HIGH,
+          + WOLF + " stands at the door with one paw raised to knock, glancing about playfully." + HIGH,
             LOWER,
             "He knocked at Grandmother's door. Who is it? she called.", BOTTOM),
 
         new Storyboard.Page(9, "Grandmother Hides",
             "Inside a cosy cottage bedroom, " + GRANDMA + " hurries toward a big wooden wardrobe, "
-          + "peeking back over her shoulder with wide eyes. A grey wolf shadow looms at the door." + HIGH,
+          + "peeking back over her shoulder with wide eyes. A grey wolf shadow stands at the door." + HIGH,
             LOWER,
             "Grandmother hid in the wardrobe as the wolf crept inside.", BOTTOM),
 
@@ -116,7 +116,7 @@ public final class RedRidingHood {
 
         new Storyboard.Page(14, "Big Teeth",
             RED + " stepping back with a startled face as " + WOLF + " sits up in bed, nightcap crooked, "
-          + "showing a very wide toothy grin." + HIGH,
+          + "showing a very wide cheeky grin." + HIGH,
             LOWER,
             "And what big teeth you have! All the better to gobble you up!", BOTTOM),
 
@@ -127,7 +127,7 @@ public final class RedRidingHood {
             "Red shrieked and ran around the room as the wolf leapt out of bed.", TOP),
 
         new Storyboard.Page(16, "The Woodcutter",
-            WOODCUTTER + " bursts through the cottage door, axe held high, looking fierce but kind, "
+            WOODCUTTER + " bursts through the cottage door, axe held high, looking determined and kind, "
           + "while " + RED + " ducks behind a chair." + HIGH,
             LOWER,
             "Just then, a brave woodcutter burst through the door!", BOTTOM),

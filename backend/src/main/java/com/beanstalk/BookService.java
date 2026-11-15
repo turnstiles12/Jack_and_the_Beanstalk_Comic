@@ -182,11 +182,13 @@ public class BookService {
     private byte[] generateWithRetry(Job job, Storyboard.Page p, byte[] refJpeg, String looks) throws Exception {
         Exception last = null;
         byte[] lastImg = null;
+        int flagged = 0;     // how many times the image service's safety filter rejected this page
         long deadline = job.startedAt + budgetSeconds * 1000L;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             if (attempt > 0 && System.currentTimeMillis() >= deadline) break;   // out of time: keep what we have
             try {
-                byte[] img = generator.generate(p, refJpeg, looks, seed + attempt);
+                // A flagged page would be flagged again with the same prompt, so each retry is worded more gently.
+                byte[] img = generator.generate(Softener.soften(p, flagged), refJpeg, looks, seed + attempt);
                 lastImg = img;
                 job.imageCalls.incrementAndGet();
                 boolean others = job.story != Stories.JACK || p.number() == 1 || p.number() == 14 || p.number() == 19;   // other people on the page
@@ -195,11 +197,22 @@ public class BookService {
                 if (verifier.sameChild(refJpeg, img, others)) return img;
             } catch (Exception e) {
                 last = e;
-                Thread.sleep(400L * (attempt + 1));
+                if (Softener.isFlagged(e)) {
+                    flagged++;
+                    log.warn("Book {} page {} ({}): the image service flagged the output (attempt {}); retrying with softer wording",
+                            job.id, p.number(), job.story.id(), attempt + 1);
+                } else {
+                    Thread.sleep(400L * (attempt + 1));
+                }
             }
         }
         if (lastImg != null) return lastImg;   // checker kept saying no; ship best effort rather than fail the book
-        throw new RuntimeException("Page " + p.number() + " failed: " + rootMessage(last), last);
+        log.error("Book {} page {} ({}) failed", job.id, p.number(), job.story.id(), last);
+        if (flagged > 0)
+            throw new RuntimeException("The image service's safety filter rejected page " + p.number() + " (\"" + p.title()
+                    + "\") of " + job.story.title() + " " + flagged + " times, even with gentler wording. "
+                    + "If it keeps happening, try a different photo.");
+        throw new RuntimeException("Page " + p.number() + " (" + p.title() + ") failed: " + rootMessage(last));
     }
 
     /** Small JPEG of page 1 for the "My books" shelf; null if it can't be made (the book is still saved). */

@@ -51,6 +51,24 @@ class PipelineTest {
     }
 
     @Test
+    void softenerCalmsScenesButNeverTouchesTextOrStyle() {
+        for (Story story : Stories.ALL) {
+            for (Storyboard.Page p : story.allPages()) {
+                for (int level = 0; level <= 3; level++) {
+                    Storyboard.Page s = Softener.soften(p, level);
+                    assertEquals(p.text(), s.text());
+                    assertEquals(p.zone(), s.zone());
+                    assertTrue(s.prompt().endsWith(Storyboard.STYLE));
+                }
+                String soft = Softener.soften(p, 2).prompt().toLowerCase();
+                assertFalse(soft.contains("axe") || soft.contains("toothy") || soft.contains("fierce"), story.id() + " p" + p.number());
+            }
+        }
+        assertTrue(Softener.isFlagged(new RuntimeException("Cloudflare HTTP 400: AiError: Your output has been flagged.")));
+        assertFalse(Softener.isFlagged(new RuntimeException("Cloudflare HTTP 429")));
+    }
+
+    @Test
     void pngIsConvertedToJpegAndJpegIsLeftAlone() throws Exception {
         BufferedImage im = new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB);
         ByteArrayOutputStream png = new ByteArrayOutputStream();
