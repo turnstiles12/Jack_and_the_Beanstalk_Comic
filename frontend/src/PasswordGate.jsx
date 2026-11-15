@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { postJson } from "./api.js";
+import { Brand, GateLayout } from "./Scenery.jsx";
 
 // Page 1: the shared site password. Nothing else on the site loads until this is passed.
 export default function PasswordGate({ onDone }) {
@@ -23,18 +24,23 @@ export default function PasswordGate({ onDone }) {
   }
 
   return (
-    <main className="card gate">
-      <div className="gate-icon" aria-hidden="true">🔒</div>
-      <h1>Jack and the Beanstalk</h1>
-      <p className="sub">This storybook maker is private. Enter the password to come in.</p>
-      <form onSubmit={submit}>
-        <label>Password
-          <input type="password" value={password} autoFocus autoComplete="current-password"
-            onChange={(e) => setPassword(e.target.value)} required />
+    <GateLayout>
+      <Brand big />
+      <p className="eyebrow">Members only</p>
+      <h1 className="gate-title">Knock, knock! Who's there?</h1>
+      <p className="lede">Our comic shop is open by invitation. Whisper the secret password to step inside and become the hero of your own tale.</p>
+      <form onSubmit={submit} className="gate-form">
+        <label className="field">
+          <span className="field-label">Password</span>
+          <span className="input-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" /></svg>
+            <input type="password" value={password} autoFocus autoComplete="current-password"
+              placeholder="Enter the password" onChange={(e) => setPassword(e.target.value)} required />
+          </span>
         </label>
         {error && <p className="error" role="alert">{error}</p>}
-        <button disabled={busy || !password}>{busy ? "Checking…" : "Enter"}</button>
+        <button className="btn btn-primary btn-block" disabled={busy || !password}>{busy ? "Opening the door…" : "Open the door"}</button>
       </form>
-    </main>
+    </GateLayout>
   );
 }

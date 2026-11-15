@@ -23,7 +23,7 @@ import java.util.concurrent.*;
 /**
  * Orchestrates one book: normalise the photo ONCE, then generate all 20 illustrations
  * (every call gets the identical reference + seed + style string), then compose the PDF.
- * In-flight jobs live in memory only; the child's photo is never written to disk, but a copy is kept in the
+ * In-flight jobs live in memory only; the person's photo is never written to disk, but a copy is kept in the
  * account's character bible in Postgres ({@link CharacterBibleStore}). A finished book is saved
  * to the signed-in account's folder ({@link BookStore}) so it can be downloaded again after signing back in.
  */
@@ -35,7 +35,7 @@ public class BookService {
     public static final class Job {
         public final String id = UUID.randomUUID().toString();
         public final String owner;     // Google account id (sub) that started this book
-        public final String name;      // child's name, used for the download file name
+        public final String name;      // the person's name, used for the download file name
         public final Story story;      // which built-in template this book uses
         public volatile State state = State.AWAITING_PAYMENT;
         public volatile int pagesDone = 0;
@@ -104,12 +104,12 @@ public class BookService {
         } else {
             // Text-only model: it cannot see a photo, so the typed description is the only identity signal.
             if (appearance == null || appearance.isBlank())
-                throw new IllegalArgumentException("Please describe how the child looks (hair, eyes, skin tone).");
+                throw new IllegalArgumentException("Please describe how you look (hair, eyes, skin tone).");
             refJpeg = hasPhoto ? normalisePhoto(photo) : null;   // only used by the optional verifier
             looks = "with " + appearance.strip();
         }
         if (refJpeg != null) {
-            // The account's character bible keeps the reference photo (as the "child" entry) so it can be reused and edited.
+            // The account's character bible keeps the reference photo (as the "child" slug, kept for stored data) so it can be reused and edited.
             try {
                 bible.saveUserPhoto(owner, refJpeg);
             } catch (Exception e) {
@@ -194,7 +194,7 @@ public class BookService {
                 boolean others = job.story != Stories.JACK || p.number() == 1 || p.number() == 14 || p.number() == 19;   // other people on the page
                 if (refJpeg == null) return img;
                 if (verifier.active()) job.verifyCalls.incrementAndGet();
-                if (verifier.sameChild(refJpeg, img, others)) return img;
+                if (verifier.samePerson(refJpeg, img, others)) return img;
             } catch (Exception e) {
                 last = e;
                 if (Softener.isFlagged(e)) {

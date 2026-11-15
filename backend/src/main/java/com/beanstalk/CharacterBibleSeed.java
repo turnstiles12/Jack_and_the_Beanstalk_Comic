@@ -24,8 +24,8 @@ final class CharacterBibleSeed {
         new Entry("jack", "Jack", "Hero",
             Storyboard.JACK,
             "rust-orange tunic, brown leather vest, tan trousers, small green cap"),
-        new Entry("child", "The child (uploaded photo)", "Reference for Jack's face",
-            "The child whose photo was uploaded. Jack takes this child's face, hair and skin tone: "
+        new Entry("child", "You (uploaded photo)", "Reference for Jack's face",
+            "The person whose photo was uploaded. Jack takes this person's face, hair and skin tone: "
           + "the {LOOKS} part of Jack's description is filled from this reference.",
             ""),
         new Entry("mother", "Jack's mother", "Supporting",

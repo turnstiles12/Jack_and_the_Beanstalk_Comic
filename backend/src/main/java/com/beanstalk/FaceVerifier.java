@@ -41,20 +41,20 @@ public class FaceVerifier {
         return (p.equals("openai") && !openaiKey.isBlank()) || (p.equals("anthropic") && !anthropicKey.isBlank());
     }
 
-    public boolean sameChild(byte[] referenceJpeg, byte[] pageImage, boolean pageHasOtherPeople) {
+    public boolean samePerson(byte[] referenceJpeg, byte[] pageImage, boolean pageHasOtherPeople) {
         try {
-            String q = "Image 1 is a photo of a real child. Image 2 is a 3D-animated storybook illustration "
-                     + "whose main child character must look like that same child (face shape, eyes, "
-                     + "hair colour and style, skin tone, apparent age). "
-                     + (pageHasOtherPeople ? "Other characters may appear; judge only the main child character. " : "")
-                     + "Reply with JSON only: {\"same_child\": true} or {\"same_child\": false}.";
+            String q = "Image 1 is a photo of a real person. Image 2 is a 3D-animated comic book illustration "
+                     + "whose main character must look like that same person (face shape, eyes, "
+                     + "hair colour and style, skin tone). "
+                     + (pageHasOtherPeople ? "Other characters may appear; judge only the main character. " : "")
+                     + "Reply with JSON only: {\"same_person\": true} or {\"same_person\": false}.";
             String answer = switch (provider == null ? "none" : provider.toLowerCase()) {
                 case "openai" -> askOpenAi(q, referenceJpeg, pageImage);
                 case "anthropic" -> askAnthropic(q, referenceJpeg, pageImage);
                 default -> null;
             };
             if (answer == null) return true;
-            return !answer.replace(" ", "").toLowerCase().contains("\"same_child\":false");
+            return !answer.replace(" ", "").toLowerCase().contains("\"same_person\":false");
         } catch (Exception e) {
             log.warn("Face verification skipped: {}", e.toString());
             return true;

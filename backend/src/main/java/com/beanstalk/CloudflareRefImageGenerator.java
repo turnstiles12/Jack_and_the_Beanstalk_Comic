@@ -23,7 +23,7 @@ import java.util.UUID;
 
 /**
  * Cloudflare Workers AI FLUX.2 klein (multi-reference image generation/editing).
- * The child's photo is sent as multipart field "input_image_0" on EVERY page call, together with a
+ * The person's photo is sent as multipart field "input_image_0" on EVERY page call, together with a
  * fixed instruction + the page prompt (fixed STYLE sentence last). Model limits (per Cloudflare docs):
  * reference images must be smaller than 512x512, up to 4 of them; output width/height 256-1920;
  * steps are fixed at 4; no negative prompt and no documented seed.
@@ -35,7 +35,7 @@ public class CloudflareRefImageGenerator implements ImageGenerator {
 
     /** Fixed prefix, identical on every call. The fixed STYLE sentence stays last, untouched. */
     static final String REFERENCE_INSTRUCTION =
-            "Create a brand-new storybook illustration. The child in image 1 is the main character of the story: "
+            "Create a brand-new comic book illustration. The person in image 1 is the main character of the comic: "
           + "keep their exact face, hair and skin tone recognisable. Do not reuse the background or clothing of image 1.";
 
     private final ObjectMapper json = new ObjectMapper();
@@ -55,13 +55,14 @@ public class CloudflareRefImageGenerator implements ImageGenerator {
         if (accountId.isBlank() || token.isBlank())
             throw new IllegalStateException("CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN must be set");
 
-        byte[] ref = shrink(referenceJpeg, refMaxSide);   // identical bytes on every call
+        // referenceJpeg == null is the last-resort retry for a page the safety filter keeps rejecting: text only.
+        byte[] ref = referenceJpeg == null ? null : shrink(referenceJpeg, refMaxSide);   // identical bytes on every call
         String boundary = "----beanstalk" + UUID.randomUUID();
         ByteArrayOutputStream body = new ByteArrayOutputStream();
-        field(body, boundary, "prompt", REFERENCE_INSTRUCTION + " " + page.prompt(looks));
+        field(body, boundary, "prompt", (ref == null ? "" : REFERENCE_INSTRUCTION + " ") + page.prompt(looks));
         field(body, boundary, "width", String.valueOf(width));
         field(body, boundary, "height", String.valueOf(height));
-        file(body, boundary, "input_image_0", "reference.jpg", "image/jpeg", ref);   // name must match exactly
+        if (ref != null) file(body, boundary, "input_image_0", "reference.jpg", "image/jpeg", ref);   // name must match exactly
         body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
         HttpRequest req = HttpRequest.newBuilder(URI.create(baseUrl + "/accounts/" + accountId + "/ai/run/" + model))

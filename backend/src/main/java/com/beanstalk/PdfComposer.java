@@ -33,11 +33,11 @@ public class PdfComposer {
     private record Line(String text, float size, float width) {}
 
     /** Jack and the Beanstalk (kept for callers that do not choose a story). */
-    public byte[] compose(List<byte[]> images, String childName, String details) throws IOException {
-        return compose(images, childName, details, Stories.JACK);
+    public byte[] compose(List<byte[]> images, String personName, String details) throws IOException {
+        return compose(images, personName, details, Stories.JACK);
     }
 
-    public byte[] compose(List<byte[]> images, String childName, String details, Story story) throws IOException {
+    public byte[] compose(List<byte[]> images, String personName, String details, Story story) throws IOException {
         if (images.size() != Story.PAGE_COUNT)
             throw new IllegalArgumentException("Need exactly " + Story.PAGE_COUNT + " images, got " + images.size());
 
@@ -52,7 +52,7 @@ public class PdfComposer {
                 font = PDType0Font.load(doc, in);
             }
             PDDocumentInformation info = new PDDocumentInformation();
-            info.setTitle(story.title() + " — starring " + clean(font, childName));
+            info.setTitle(story.title() + " — starring " + clean(font, personName));
             doc.setDocumentInformation(info);
 
             // Pages 1-19: story pages, text exactly as hard-coded in the story template.
@@ -73,7 +73,7 @@ public class PdfComposer {
                 drawFullBleed(doc, cs, images.get(19), size);
                 List<Para> paras = new ArrayList<>();
                 paras.add(new Para("ABOUT ME", 14f, 4f));
-                paras.add(new Para(clean(font, childName), 34f, 8f));
+                paras.add(new Para(clean(font, personName), 34f, 8f));
                 String d = clean(font, details);
                 if (!d.isBlank()) paras.add(new Para(d, 16f, 0));
                 drawPanel(cs, font, paras, Storyboard.Zone.BOTTOM, 0.46f, size);

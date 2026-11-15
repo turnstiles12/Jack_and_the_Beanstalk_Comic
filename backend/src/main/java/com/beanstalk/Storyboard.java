@@ -21,7 +21,7 @@ public final class Storyboard {
 
     /** Same clothes on every page. */
     public static final String JACK =
-            "Jack, a young child {LOOKS}, wearing a rust-orange tunic, "
+            "Jack, a hero {LOOKS}, wearing a rust-orange tunic, "
           + "a brown leather vest, tan trousers, and a small green cap";
 
     /** Fills {LOOKS} for providers that receive the photo (openai, fal, mock). */
@@ -49,7 +49,7 @@ public final class Storyboard {
             return prompt(PHOTO_LOOKS);
         }
 
-        /** Same, with the child's look filled in ("with short curly brown hair, brown eyes" for text-only models). */
+        /** Same, with the hero's look filled in ("with short curly brown hair, brown eyes" for text-only models). */
         public String prompt(String looks) {
             return (scene + " " + quiet).replace("{LOOKS}", looks) + " " + STYLE;
         }
@@ -89,7 +89,7 @@ public final class Storyboard {
 
         new Page(5, "Planting the Seeds",
             JACK + ", kneeling in the cottage garden in warm morning light, planting the magic seeds: "
-          + "pressing a bean into a small hole in the soil with a little wooden trowel beside him, smiling "
+          + "pressing a bean into a small hole in the soil with a small wooden trowel beside him, smiling "
           + "with hope. A few more beans rest in his other palm.",
             LOWER,
             "In the morning light, he dug little holes and planted the seeds, one by one.", Zone.BOTTOM),
@@ -129,7 +129,7 @@ public final class Storyboard {
             "Inside a giant's kitchen with enormous furniture. " + JACK + ", peeks out from behind a huge "
           + "copper pot, eyes wide. A huge friendly-grumpy giant with a bushy beard strides in, sniffing the air.",
             LOWER,
-            "Fee-fi-fo-fum! the giant roared. I smell a boy!", Zone.BOTTOM),
+            "Fee-fi-fo-fum! the giant roared. I smell a human!", Zone.BOTTOM),
 
         new Page(12, "The Giant's Gold",
             "A giant sitting at an oversized table counting piles of shiny gold coins, then dozing off with "
@@ -174,13 +174,13 @@ public final class Storyboard {
             "Jack grabbed an axe and chopped. Down came the beanstalk!", Zone.TOP),
 
         new Page(19, "Happily Ever After",
-            JACK + ", his mother, the golden hen and the little golden harp together in front of their "
+            JACK + ", his mother, the golden hen and the small golden harp together in front of their "
           + "cosy cottage in a sunny garden full of flowers, everyone smiling, warm sunset light.",
             LOWER,
             "And Jack and his mother lived happily ever after. The End.", Zone.BOTTOM)
     );
 
-    /** Page 20: portrait of the child (same reference, same style string). */
+    /** Page 20: portrait of the hero (same reference, same style string). */
     public static final Page ABOUT_ME_PORTRAIT = new Page(20, "About Me",
         "A friendly head-and-shoulders portrait of " + JACK + ", smiling warmly at the camera, front-lit, "
       + "centred, against a soft sunny meadow background with a tiny beanstalk far behind.",

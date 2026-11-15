@@ -46,7 +46,7 @@ public class StripePayments {
         f.put("line_items[0][quantity]", "1");
         f.put("line_items[0][price_data][currency]", "usd");
         f.put("line_items[0][price_data][unit_amount]", String.valueOf(priceCents));
-        f.put("line_items[0][price_data][product_data][name]", "Personalized \"Jack and the Beanstalk\" storybook");
+        f.put("line_items[0][price_data][product_data][name]", "Personalized comic book");
         f.put("client_reference_id", jobId);
         f.put("metadata[owner]", owner);
         f.put("success_url", origin + "/?book=" + jobId + "&session_id={CHECKOUT_SESSION_ID}");

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * One built-in storybook template: 19 story pages plus the page-20 "About Me" portrait.
+ * One built-in comic template: 19 story pages plus the page-20 "About Me" portrait.
  * Every story shares the same page layout (page numbers, text zones, panel sizes), so the PDF composer
  * and the progress UI treat them identically; only the scenes, the text and the hero's outfit differ.
  *

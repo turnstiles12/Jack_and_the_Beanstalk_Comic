@@ -4,6 +4,7 @@ import PasswordGate from "./PasswordGate.jsx";
 import GoogleSignIn from "./GoogleSignIn.jsx";
 import Maker from "./Maker.jsx";
 import Library from "./Library.jsx";
+import { Backdrop, Brand } from "./Scenery.jsx";
 
 // Three stages, decided by the server (/api/auth/status):
 //   1. site password  ->  2. Google sign-in  ->  3. the app (make a book / My books)
@@ -35,31 +36,42 @@ export default function App() {
   }
 
   if (loadError) return (
-    <main className="card gate">
-      <p className="error">{loadError}</p>
-      <button onClick={refresh}>Try again</button>
-    </main>
+    <Backdrop>
+      <main className="notice-card">
+        <Brand />
+        <p className="error">{loadError}</p>
+        <button className="btn btn-primary" onClick={refresh}>Try again</button>
+      </main>
+    </Backdrop>
   );
-  if (!auth) return <p className="sub center">Loading…</p>;
+  if (!auth) return <Backdrop><p className="loading">Opening the shop…</p></Backdrop>;
   if (!auth.passwordOk) return <PasswordGate onDone={refresh} />;
   if (!auth.user) return <GoogleSignIn clientId={auth.googleClientId} onDone={refresh} />;
 
   return (
-    <>
-      <header className="bar">
-        <nav>
-          <button className={view === "make" ? "tab on" : "tab"} onClick={() => setView("make")}>New book</button>
-          <button className={view === "library" ? "tab on" : "tab"} onClick={() => setView("library")}>My books</button>
-        </nav>
-        <div className="who">
-          {auth.user.picture && <img src={auth.user.picture} alt="" referrerPolicy="no-referrer" />}
-          <span title={auth.user.email}>{auth.user.name || auth.user.email}</span>
-          <button className="link" onClick={signOut}>Sign out</button>
+    <Backdrop>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <Brand />
+          <nav className="topnav" aria-label="Main">
+            <button className={view === "make" ? "navlink on" : "navlink"} onClick={() => setView("make")}>Make a comic</button>
+            <button className={view === "library" ? "navlink on" : "navlink"} onClick={() => setView("library")}>My bookshelf</button>
+          </nav>
+          <div className="who">
+            {auth.user.picture && <img src={auth.user.picture} alt="" referrerPolicy="no-referrer" />}
+            <span title={auth.user.email}>{auth.user.name || auth.user.email}</span>
+            <button className="navlink subtle" onClick={signOut}>Sign out</button>
+          </div>
         </div>
       </header>
-      {view === "make"
-        ? <Maker onLibrary={() => setView("library")} />
-        : <main className="card wide"><Library onNew={() => setView("make")} /></main>}
-    </>
+      <div className="page">
+        {view === "make"
+          ? <Maker onLibrary={() => setView("library")} />
+          : <Library onNew={() => setView("make")} />}
+      </div>
+      <footer className="sitefoot">
+        <p>Once Upon a Comic · Personalized comics from classic tales · Secure checkout by Stripe</p>
+      </footer>
+    </Backdrop>
   );
 }

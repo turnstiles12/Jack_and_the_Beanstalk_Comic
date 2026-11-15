@@ -14,7 +14,7 @@ import static com.beanstalk.Storyboard.Zone.TOP;
  * Rules, same as {@link Storyboard}: every prompt ends with the fixed STYLE sentence, no prompt asks the model to
  * draw lettering, the hero's outfit is one constant, and the story text is drawn later by the PDF composer.
  * Characters are placed away from the zone that holds the text, so the text panel does not cover a face.
- * The story text avoids pronouns for Red so any child's photo fits.
+ * The story text avoids pronouns for Red so any photo fits.
  */
 public final class RedRidingHood {
 
@@ -22,10 +22,10 @@ public final class RedRidingHood {
 
     /** Same clothes on every page. */
     public static final String RED =
-            "Red, a young child {LOOKS}, wearing a bright red hooded cloak over a cream blouse, "
+            "Red, a hero {LOOKS}, wearing a bright red hooded cloak over a cream blouse, "
           + "a mossy-green vest, brown trousers and sturdy brown boots";
 
-    private static final String MOTHER = "their kind mother, a woman with a warm smile in a green apron";
+    private static final String MOTHER = "a kind woman with a warm smile in a green apron";
     private static final String GRANDMA = "a sweet grandmother with silver hair in a bun, round spectacles and a lilac shawl";
     private static final String WOLF = "a tall grey wolf with a long muzzle, amber eyes and a cheeky grin";
     private static final String WOODCUTTER = "a burly woodcutter with a bushy brown beard, a red-checked shirt and a felling axe";
@@ -38,12 +38,12 @@ public final class RedRidingHood {
         new Storyboard.Page(1, "The Basket",
             RED + ", standing at the door of a cosy woodland cottage, holding a wicker basket covered with a "
           + "checked cloth. Beside them stands " + MOTHER + ". Full face, front-lit, facing the "
-          + "camera three-quarters toward their mother." + HIGH,
+          + "camera three-quarters." + HIGH,
             LOWER,
             "Red's mother packed a basket for Grandmother, who was feeling poorly.", BOTTOM),
 
         new Storyboard.Page(2, "Stay on the Path",
-            "A sunny cottage garden gate. " + MOTHER + ", gently holds up one finger in a warning, bending toward "
+            "A sunny cottage garden gate. " + MOTHER + ", gently holds up one finger in a warning, standing close to "
           + RED + ", who nods with the basket on one arm, a winding forest path behind them." + LOW,
             UPPER,
             "Stay on the path, Red's mother said, and Red promised to.", TOP),
@@ -64,7 +64,7 @@ public final class RedRidingHood {
             "In a forest clearing, " + WOLF + " leans down toward " + RED + ", who points along the path "
           + "with a trusting smile, basket in the other hand." + HIGH,
             LOWER,
-            "Where are you going, little one? the wolf asked, ever so politely.", BOTTOM),
+            "Where are you going, friend? the wolf asked, ever so politely.", BOTTOM),
 
         new Storyboard.Page(6, "A Meadow of Flowers",
             RED + ", standing at the edge of a bright meadow full of red poppies and yellow daisies, "
@@ -152,7 +152,7 @@ public final class RedRidingHood {
             "They shared the basket of treats, and Red never left the path again. The End.", BOTTOM)
     );
 
-    /** Page 20: portrait of the child (same reference, same style string). */
+    /** Page 20: portrait of the hero (same reference, same style string). */
     public static final Storyboard.Page ABOUT_ME_PORTRAIT = new Storyboard.Page(20, "About Me",
         "A friendly head-and-shoulders portrait of " + RED + ", smiling warmly at the camera, front-lit, "
       + "centred, against a soft sunny forest clearing with red poppies and a tiny cottage far behind.",

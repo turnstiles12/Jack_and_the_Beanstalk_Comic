@@ -17,8 +17,8 @@ import java.util.Base64;
 import java.util.UUID;
 
 /**
- * OpenAI Images "edits" endpoint: the child's photo is sent as the input image on EVERY call and the
- * model paints a brand-new scene around that child. input_fidelity=high asks the model to preserve
+ * OpenAI Images "edits" endpoint: the person's photo is sent as the input image on EVERY call and the
+ * model paints a brand-new scene around that person. input_fidelity=high asks the model to preserve
  * facial features of the input. (OpenAI has no seed parameter, so consistency comes from the
  * identical reference + identical fixed instruction + FaceVerifier retries.)
  */
@@ -28,7 +28,7 @@ public class OpenAiImageGenerator implements ImageGenerator {
 
     /** Fixed prefix, identical on every call. The fixed STYLE sentence stays last, untouched. */
     static final String REFERENCE_INSTRUCTION =
-            "Create a brand-new storybook illustration. The child in the provided photo is the main character of the story: "
+            "Create a brand-new comic book illustration. The person in the provided photo is the main character of the comic: "
           + "keep their exact face, hair and skin tone recognisable. Do not reuse the photo's background or clothing.";
 
     private final ObjectMapper json = new ObjectMapper();
