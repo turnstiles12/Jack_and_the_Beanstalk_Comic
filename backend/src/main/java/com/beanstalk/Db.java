@@ -25,6 +25,7 @@ public class Db {
         DataSource ds = build(url.strip());
         try (Connection c = ds.getConnection(); Statement s = c.createStatement()) {
             for (String ddl : SCHEMA) s.execute(ddl);
+            CharacterBibleSeed.seedTemplate(c);
         }
         return ds;
     }
@@ -55,6 +56,21 @@ public class Db {
         "CREATE INDEX IF NOT EXISTS books_owner_created ON books (owner, created_at DESC)",
         "CREATE TABLE IF NOT EXISTS cost_stats (id int PRIMARY KEY CHECK (id = 1), books bigint NOT NULL DEFAULT 0,"
             + " total_usd double precision NOT NULL DEFAULT 0)",
-        "INSERT INTO cost_stats (id) VALUES (1) ON CONFLICT DO NOTHING"
+        "INSERT INTO cost_stats (id) VALUES (1) ON CONFLICT DO NOTHING",
+
+        // Character bible: one shared template (is_template) plus an optional per-account copy that holds the
+        // account's own reference photo and edits. owner is the Google account id, like books.owner.
+        "CREATE TABLE IF NOT EXISTS character_bibles (id uuid PRIMARY KEY, owner text, is_template boolean NOT NULL DEFAULT false,"
+            + " title text NOT NULL, style text NOT NULL, negative_prompt text NOT NULL, reference_instruction text NOT NULL,"
+            + " created_at bigint NOT NULL, updated_at bigint NOT NULL,"
+            + " CHECK ((is_template AND owner IS NULL) OR (NOT is_template AND owner IS NOT NULL)))",
+        "CREATE UNIQUE INDEX IF NOT EXISTS character_bibles_one_template ON character_bibles (is_template) WHERE is_template",
+        "CREATE UNIQUE INDEX IF NOT EXISTS character_bibles_one_per_owner ON character_bibles (owner) WHERE owner IS NOT NULL",
+        "CREATE TABLE IF NOT EXISTS character_bible_entries (id uuid PRIMARY KEY, bible_id uuid NOT NULL"
+            + " REFERENCES character_bibles (id) ON DELETE CASCADE, slug text NOT NULL, display_name text NOT NULL,"
+            + " role text NOT NULL DEFAULT '', description text NOT NULL, outfit text NOT NULL DEFAULT '',"
+            + " image bytea, image_mime text, image_source text NOT NULL DEFAULT 'none'"
+            + " CHECK (image_source IN ('none', 'user_photo', 'generated', 'uploaded')),"
+            + " sort_order int NOT NULL DEFAULT 0, updated_at bigint NOT NULL, UNIQUE (bible_id, slug))"
     };
 }

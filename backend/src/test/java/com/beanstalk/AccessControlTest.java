@@ -178,4 +178,46 @@ class AccessControlTest {
         assertTrue(later.delete("google-sub-A", id));
         assertTrue(later.list("google-sub-A").isEmpty());
     }
+
+    /** Needs a real Postgres: set TEST_DATABASE_URL to a throwaway database (e.g. a Neon branch). Skipped otherwise. */
+    @Test
+    void characterBibleIsPerAccountAndStartsFromTheTemplate() throws Exception {
+        String url = System.getenv("TEST_DATABASE_URL");
+        org.junit.jupiter.api.Assumptions.assumeTrue(url != null && !url.isBlank(), "TEST_DATABASE_URL not set");
+        javax.sql.DataSource ds = Db.build(url);
+        try (var c = ds.getConnection(); var st = c.createStatement()) {
+            for (String ddl : Db.SCHEMA) st.execute(ddl);
+            CharacterBibleSeed.seedTemplate(c);
+        }
+        CharacterBibleStore bible = new CharacterBibleStore(ds);
+        String a = "bible-test-A-" + java.util.UUID.randomUUID(), b = "bible-test-B-" + java.util.UUID.randomUUID();
+        try {
+            // before any write, an account reads the shared template
+            List<CharacterBibleStore.Entry> template = bible.entries(a);
+            assertTrue(template.size() >= 8);
+            assertTrue(bible.image(a, "child").isEmpty());
+
+            byte[] photo = {9, 8, 7};
+            bible.saveUserPhoto(a, photo);
+            assertArrayEquals(photo, bible.image(a, "child").orElseThrow().bytes());
+            assertEquals("user_photo", bible.entries(a).stream().filter(e -> e.slug().equals("child")).findFirst().orElseThrow().imageSource());
+            assertTrue(bible.image(b, "child").isEmpty(), "another account must not see A's photo");
+
+            // edits land in A's copy only, and never in the template or B's view
+            assertTrue(bible.updateEntry(a, "mother", "Jack's mum", "Supporting", "Kind, curly red hair.", "green apron"));
+            assertEquals("Jack's mum", bible.entries(a).stream().filter(e -> e.slug().equals("mother")).findFirst().orElseThrow().displayName());
+            assertEquals("Jack's mother", bible.entries(b).stream().filter(e -> e.slug().equals("mother")).findFirst().orElseThrow().displayName());
+
+            assertThrows(IllegalArgumentException.class, () -> bible.updateEntry(a, "mother", "", "", "", ""));
+            assertFalse(bible.updateEntry(a, "../etc", "x", "", "x", ""));
+
+            assertTrue(bible.deleteUserPhoto(a));
+            assertTrue(bible.image(a, "child").isEmpty());
+            assertFalse(bible.deleteUserPhoto(b), "B has no copy, so nothing to delete");
+        } finally {
+            try (var c = ds.getConnection(); var ps = c.prepareStatement("DELETE FROM character_bibles WHERE owner IN (?, ?)")) {
+                ps.setString(1, a); ps.setString(2, b); ps.executeUpdate();
+            }
+        }
+    }
 }

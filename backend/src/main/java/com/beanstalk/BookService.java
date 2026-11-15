@@ -23,7 +23,8 @@ import java.util.concurrent.*;
 /**
  * Orchestrates one book: normalise the photo ONCE, then generate all 20 illustrations
  * (every call gets the identical reference + seed + style string), then compose the PDF.
- * In-flight jobs live in memory only; the child's photo is never written to disk. A finished book is saved
+ * In-flight jobs live in memory only; the child's photo is never written to disk, but a copy is kept in the
+ * account's character bible in Postgres ({@link CharacterBibleStore}). A finished book is saved
  * to the signed-in account's folder ({@link BookStore}) so it can be downloaded again after signing back in.
  */
 @Service
@@ -59,6 +60,7 @@ public class BookService {
     private final FaceVerifier verifier;
     private final BookStore store;
     private final CostTracker costs;
+    private final CharacterBibleStore bible;
     private final ExecutorService jobPool = Executors.newFixedThreadPool(2);
     private final ExecutorService pagePool;
 
@@ -66,8 +68,10 @@ public class BookService {
     @Value("${beanstalk.image.max-attempts}") private int maxAttempts;
 
     public BookService(ImageGenerator generator, PdfComposer composer, FaceVerifier verifier, BookStore store,
-                       CostTracker costs, @Value("${beanstalk.image.parallelism}") int parallelism) {
+                       CostTracker costs, CharacterBibleStore bible,
+                       @Value("${beanstalk.image.parallelism}") int parallelism) {
         this.generator = generator;
+        this.bible = bible;
         this.composer = composer;
         this.verifier = verifier;
         this.store = store;
@@ -92,6 +96,14 @@ public class BookService {
                 throw new IllegalArgumentException("Please describe how the child looks (hair, eyes, skin tone).");
             refJpeg = hasPhoto ? normalisePhoto(photo) : null;   // only used by the optional verifier
             looks = "with " + appearance.strip();
+        }
+        if (refJpeg != null) {
+            // The account's character bible keeps the reference photo (as the "child" entry) so it can be reused and edited.
+            try {
+                bible.saveUserPhoto(owner, refJpeg);
+            } catch (Exception e) {
+                log.error("Could not save the reference photo to the character bible; continuing without it", e);
+            }
         }
         Job job = new Job(owner, name);
         job.refJpeg = refJpeg;

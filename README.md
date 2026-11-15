@@ -20,7 +20,9 @@ Visitors pass two pages before they can use the app, and every `/api/**` call (e
 
 Both steps are remembered in one signed, HttpOnly, SameSite=Lax cookie (30 days, `AuthTokens`). It is stateless, so deploys don't log anyone out. The signing key mixes `SESSION_SECRET` with the site password, so **changing `SITE_PASSWORD` signs everyone out**.
 
-Each Google account gets a row in `users` at sign-in (`UserStore`), and each finished book is a row in `books` (PDF + thumbnail as bytea, `BookStore`). Every query filters on the owner. Signing back in lists them under **My books** (download or delete). An account can only ever read its own rows. Photos are still never stored.
+Each Google account gets a row in `users` at sign-in (`UserStore`), and each finished book is a row in `books` (PDF + thumbnail as bytea, `BookStore`). Every query filters on the owner. Signing back in lists them under **My books** (download or delete). An account can only ever read its own rows.
+
+**Character bible.** `character_bibles` holds one shared template (Jack, the uploaded child, mother, old man, giant, cow, hen, harp, plus the style, negative prompt and reference instruction) and one editable copy per account; `character_bible_entries` holds each character's text and picture (`bytea`). When a book is started, the normalised reference photo is saved as the account's `child` entry, so the uploaded photo **is** now stored in Postgres (it is no longer in-memory only). Endpoints, all scoped to the signed-in account: `GET /api/bible`, `PUT /api/bible/{slug}`, `GET|PUT /api/bible/{slug}/image`, `DELETE /api/bible/photo` (removes the stored photo). The page prompts still come from `Storyboard`; generation does not read the bible yet.
 
 | Env var | Purpose |
 |---|---|
@@ -28,7 +30,7 @@ Each Google account gets a row in `users` at sign-in (`UserStore`), and each fin
 | `GOOGLE_CLIENT_ID` | OAuth *Web application* client id (public value) |
 | `SESSION_SECRET` | long random string that signs the cookie (Render generates one) |
 | `COOKIE_SECURE` | `true` on HTTPS (set in `render.yaml`) |
-| `DATABASE_URL` | Neon Postgres connection string (required). Tables `users`, `books`, `cost_stats` are created on first start |
+| `DATABASE_URL` | Neon Postgres connection string (required). Tables `users`, `books`, `cost_stats`, `character_bibles`, `character_bible_entries` are created on first start |
 
 ### One-time Google setup
 1. Google Cloud Console > APIs & Services > **OAuth consent screen**: configure it (External is fine; add yourself as a test user until you publish it).
