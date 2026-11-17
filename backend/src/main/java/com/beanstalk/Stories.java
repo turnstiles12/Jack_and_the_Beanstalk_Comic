@@ -2,7 +2,10 @@ package com.beanstalk;
 
 import java.util.List;
 
-/** Registry of the built-in story templates. The first entry is the default. */
+/**
+ * The built-in story templates. These are only the seed: {@link StoryTemplateStore} writes them to the database
+ * and books are generated from the stored copies. The first entry is the default.
+ */
 public final class Stories {
 
     private Stories() {}

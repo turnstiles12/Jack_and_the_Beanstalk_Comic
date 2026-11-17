@@ -11,7 +11,7 @@ import java.sql.Connection;
 import java.sql.Statement;
 
 /**
- * The Postgres (Neon) database that holds accounts, finished books and cost totals.
+ * The Postgres (Neon) database that holds accounts, finished books, cost totals, the character bible and the story templates.
  * DATABASE_URL is the connection string Neon gives you (postgresql://user:pass@host/db?sslmode=require);
  * a jdbc:postgresql:// URL also works. The tables are created on first start.
  */
@@ -73,6 +73,17 @@ public class Db {
             + " role text NOT NULL DEFAULT '', description text NOT NULL, outfit text NOT NULL DEFAULT '',"
             + " image bytea, image_mime text, image_source text NOT NULL DEFAULT 'none'"
             + " CHECK (image_source IN ('none', 'user_photo', 'generated', 'uploaded')),"
-            + " sort_order int NOT NULL DEFAULT 0, updated_at bigint NOT NULL, UNIQUE (bible_id, slug))"
+            + " sort_order int NOT NULL DEFAULT 0, updated_at bigint NOT NULL, UNIQUE (bible_id, slug))",
+
+        // Story templates: every built-in story and its 20 pages (StoryTemplateStore). Each scene keeps a {LOOKS} slot
+        // for the hero, so a book is made by putting one person into these stored pages.
+        "CREATE TABLE IF NOT EXISTS story_templates (id text PRIMARY KEY, title text NOT NULL, sort_order int NOT NULL DEFAULT 0,"
+            + " seed_hash text NOT NULL DEFAULT '', updated_at bigint NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS story_template_pages (story_id text NOT NULL REFERENCES story_templates (id) ON DELETE CASCADE,"
+            + " number int NOT NULL, title text NOT NULL, scene text NOT NULL, quiet text NOT NULL, story_text text,"
+            + " zone text NOT NULL CHECK (zone IN ('TOP', 'BOTTOM')), PRIMARY KEY (story_id, number))",
+        // Pre-drawn page art (JPEG) with a stand-in hero. A book edits the person into this picture instead of
+        // drawing the page from nothing. NULL until TemplateArtPainter has drawn it.
+        "ALTER TABLE story_template_pages ADD COLUMN IF NOT EXISTS art bytea"
     };
 }

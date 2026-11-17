@@ -41,6 +41,9 @@ public class BookService {
         public volatile int pagesDone = 0;
         public volatile String error;
         public volatile byte[] pdf;
+        /** Small JPEG of each finished page (index = page number - 1), shown on the progress screen while the rest are drawn. */
+        private final java.util.concurrent.atomic.AtomicReferenceArray<byte[]> thumbs =
+                new java.util.concurrent.atomic.AtomicReferenceArray<>(Story.PAGE_COUNT);
         public final long createdAt = System.currentTimeMillis();
         public volatile long startedAt;    // when generation began (after payment)
         public volatile long finishedAt;   // when the PDF was ready; 0 while running
@@ -53,6 +56,18 @@ public class BookService {
         final java.util.concurrent.atomic.AtomicInteger verifyCalls = new java.util.concurrent.atomic.AtomicInteger();
 
         Job(String owner, String name, Story story) { this.owner = owner; this.name = name; this.story = story; }
+
+        /** Thumbnail of a finished page (1-based), or null if that page is not done yet. */
+        public byte[] pageThumb(int number) {
+            return number >= 1 && number <= thumbs.length() ? thumbs.get(number - 1) : null;
+        }
+
+        /** Page numbers (1-based, ascending) whose final illustration is ready. */
+        public List<Integer> donePages() {
+            List<Integer> done = new ArrayList<>();
+            for (int i = 0; i < thumbs.length(); i++) if (thumbs.get(i) != null) done.add(i + 1);
+            return done;
+        }
 
         /** Milliseconds from "generation started" to "PDF ready" (or to now, while still running). */
         public long elapsedMs() {
@@ -70,6 +85,8 @@ public class BookService {
     private final BookStore store;
     private final CostTracker costs;
     private final CharacterBibleStore bible;
+    private final StoryTemplateStore templates;
+    private final TemplateArtPainter templateArt;
     private final ExecutorService jobPool = Executors.newFixedThreadPool(2);
     private final ExecutorService pagePool;
 
@@ -79,10 +96,12 @@ public class BookService {
     @Value("${beanstalk.job.budget-seconds:45}") private int budgetSeconds;
 
     public BookService(ImageGenerator generator, PdfComposer composer, FaceVerifier verifier, BookStore store,
-                       CostTracker costs, CharacterBibleStore bible,
+                       CostTracker costs, CharacterBibleStore bible, StoryTemplateStore templates, TemplateArtPainter templateArt,
                        @Value("${beanstalk.image.parallelism}") int parallelism) {
         this.generator = generator;
         this.bible = bible;
+        this.templates = templates;
+        this.templateArt = templateArt;
         this.composer = composer;
         this.verifier = verifier;
         this.store = store;
@@ -153,6 +172,9 @@ public class BookService {
             for (Storyboard.Page p : all) {
                 futures.add(pagePool.submit(() -> {
                     byte[] img = Jpegs.ensure(generateWithRetry(job, p, refJpeg, looks));
+                    // This is the exact image that goes into the PDF, so the progress screen shows real pages.
+                    byte[] thumb = thumbnail(img);
+                    if (thumb != null && p.number() >= 1 && p.number() <= Story.PAGE_COUNT) job.thumbs.set(p.number() - 1, thumb);
                     synchronized (job) { job.pagesDone++; }
                     return img;
                 }));
@@ -184,14 +206,23 @@ public class BookService {
         byte[] lastImg = null;
         int flagged = 0;     // how many times the image service's safety filter rejected this page
         long deadline = job.startedAt + budgetSeconds * 1000L;
+        // The pre-drawn picture of this page, if the template has one: the person is edited into it, so the scenery and
+        // the other characters come from the template. Without it the page is drawn from scratch as before.
+        byte[] art = templateArt.active() && refJpeg != null
+                ? templates.art(job.story.id(), p.number()).orElse(null) : null;
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
-            if (attempt > 0 && System.currentTimeMillis() >= deadline) break;   // out of time: keep what we have
+            // Out of time: keep what we have. A page with no image yet keeps trying, otherwise one slow call fails the whole book.
+            if (attempt > 0 && lastImg != null && System.currentTimeMillis() >= deadline) break;
             try {
                 // A flagged page would be flagged again with the same prompt, so each retry is worded more gently.
-                byte[] img = generator.generate(Softener.soften(p, flagged), refJpeg, looks, seed + attempt);
+                // Flagged twice with the template picture: the picture itself may be the trigger, so draw from scratch.
+                Storyboard.Page soft = Softener.soften(p, flagged);
+                byte[] img = art != null && flagged < 2
+                        ? generator.generateFromTemplate(soft, art, refJpeg, looks, seed + attempt)
+                        : generator.generate(soft, refJpeg, looks, seed + attempt);
                 lastImg = img;
                 job.imageCalls.incrementAndGet();
-                boolean others = job.story != Stories.JACK || p.number() == 1 || p.number() == 14 || p.number() == 19;   // other people on the page
+                boolean others = !Stories.JACK.id().equals(job.story.id()) || p.number() == 1 || p.number() == 14 || p.number() == 19;   // other people on the page
                 if (refJpeg == null) return img;
                 if (verifier.active()) job.verifyCalls.incrementAndGet();
                 if (verifier.samePerson(refJpeg, img, others)) return img;
@@ -215,7 +246,7 @@ public class BookService {
         throw new RuntimeException("Page " + p.number() + " (" + p.title() + ") failed: " + rootMessage(last));
     }
 
-    /** Small JPEG of page 1 for the "My books" shelf; null if it can't be made (the book is still saved). */
+    /** Small JPEG of a page: page 1 for the "My books" shelf; null if it can't be made (the book is still saved). */
     static byte[] thumbnail(byte[] pageImage) {
         try {
             BufferedImage src = ImageIO.read(new ByteArrayInputStream(pageImage));

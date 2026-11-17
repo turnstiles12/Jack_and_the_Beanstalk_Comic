@@ -24,6 +24,7 @@ import java.util.concurrent.Semaphore;
 @ConditionalOnProperty(name = "beanstalk.image.provider", havingValue = "fal")
 public class FalImageGenerator implements ImageGenerator {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FalImageGenerator.class);
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build();
 
@@ -33,10 +34,11 @@ public class FalImageGenerator implements ImageGenerator {
     @Value("${beanstalk.image.height}") private int height;
     @Value("${beanstalk.image.steps}") private int steps;
     @Value("${beanstalk.image.id-weight}") private double idWeight;
-    @Value("${beanstalk.fal.timeout-seconds:60}") private int timeoutSeconds;
+    @Value("${beanstalk.fal.true-cfg:1.5}") private double trueCfg;
+    @Value("${beanstalk.fal.timeout-seconds:40}") private int timeoutSeconds;
     @Value("${beanstalk.fal.ref-max-side:768}") private int refMaxSide;
     /** fal.ai caps concurrent requests per account (10 here). Shared by every book being made at once. */
-    @Value("${beanstalk.fal.max-concurrent:8}") private int maxConcurrent;
+    @Value("${beanstalk.fal.max-concurrent:10}") private int maxConcurrent;
     private volatile Semaphore slots;
 
     private Semaphore slots() {
@@ -57,12 +59,12 @@ public class FalImageGenerator implements ImageGenerator {
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("prompt", page.prompt(looks));                 // scene + quiet zone + fixed STYLE (last)
-        body.put("negative_prompt", Storyboard.NEGATIVE);   // no-text guard lives here only
+        if (trueCfg > 1) body.put("negative_prompt", Storyboard.NEGATIVE);   // no-text guard lives here only
         body.put("reference_image_url", referenceDataUri);  // identical on all 20 calls
         body.put("image_size", Map.of("width", width, "height", height));
         body.put("num_inference_steps", steps);
         body.put("guidance_scale", 4);
-        body.put("true_cfg", 1.5);                          // >1 activates the negative prompt
+        body.put("true_cfg", Math.max(1, trueCfg));         // >1 activates the negative prompt, but doubles the work per step
         body.put("id_weight", idWeight);
         body.put("seed", seed);
         body.put("max_sequence_length", "256");             // scene prompts are long
@@ -77,6 +79,7 @@ public class FalImageGenerator implements ImageGenerator {
 
         // Never exceed fal's concurrent-request cap; if it still answers 429, wait and try again (not a failed attempt).
         HttpResponse<String> res;
+        long sent = System.currentTimeMillis();
         int busy = 0;
         while (true) {
             Semaphore gate = slots();
@@ -90,6 +93,8 @@ public class FalImageGenerator implements ImageGenerator {
             throw new RuntimeException("fal.ai HTTP " + res.statusCode() + ": " + res.body());
         }
         JsonNode out = json.readTree(res.body());
+        log.info("fal page {}: {} ms round trip, {} steps, model timings {}", page.number(),
+                System.currentTimeMillis() - sent, steps, out.path("timings"));
         if (out.path("has_nsfw_concepts").path(0).asBoolean(false)) {
             throw new RuntimeException("Image flagged by safety checker; retry");
         }

@@ -43,6 +43,7 @@ public class CostTracker {
         return switch (provider == null ? "" : provider.toLowerCase()) {
             case "openai" -> 0.05;       // gpt-image-1.5, medium, 1024x1536
             case "fal" -> 0.0025;
+            case "fal-flux2" -> 0.015;   // flash edit: $0.005 per megapixel; photo + template page in, page out
             case "mock" -> 0.0;
             default -> 0.0015;           // cloudflare flux-1-schnell
         };

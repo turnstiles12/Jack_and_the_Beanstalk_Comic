@@ -17,11 +17,13 @@ public class BookController {
     private final BookStore store;
     private final StripePayments stripe;
     private final CostTracker costs;
+    private final StoryTemplateStore templates;   // the stories as stored in the database
 
     @org.springframework.beans.factory.annotation.Value("${beanstalk.app-base-url:}") String appBaseUrl;
 
-    public BookController(BookService books, BookStore store, StripePayments stripe, CostTracker costs) {
-        this.books = books; this.store = store; this.stripe = stripe; this.costs = costs;
+    public BookController(BookService books, BookStore store, StripePayments stripe, CostTracker costs,
+                          StoryTemplateStore templates) {
+        this.books = books; this.store = store; this.stripe = stripe; this.costs = costs; this.templates = templates;
     }
 
     @GetMapping("/api/health")
@@ -31,7 +33,7 @@ public class BookController {
     @GetMapping("/api/config")
     public Map<String, Object> config() {
         boolean photo = books.usesPhoto();
-        List<Map<String, String>> stories = Stories.ALL.stream()
+        List<Map<String, String>> stories = templates.all().stream()
                 .map(s -> Map.of("id", s.id(), "title", s.title())).toList();
         return Map.of("usesPhoto", photo, "needsAppearance", !photo,
                 "stories", stories,
@@ -52,7 +54,7 @@ public class BookController {
                                     @RequestParam(value = "appearance", defaultValue = "") String appearance,
                                     @RequestParam(value = "origin", defaultValue = "") String origin,
                                     @RequestParam(value = "story", defaultValue = "") String storyId) {
-        Story story = Stories.find(storyId);
+        Story story = templates.find(storyId);
         if (story == null)
             return ResponseEntity.badRequest().body(Map.of("error", "Please choose one of the built-in stories."));
         if (!stripe.paymentsDisabled() && !stripe.configured())
@@ -130,7 +132,32 @@ public class BookController {
                 "totalPages", Story.PAGE_COUNT,
                 "elapsedMs", j.elapsedMs(),
                 "story", j.story.id(),
+                "donePages", j.donePages(),
                 "error", j.error == null ? "" : j.error));
+    }
+
+    /** The pre-drawn template art of one story page (stand-in hero, no personal data), if it has been drawn. */
+    @GetMapping("/api/stories/{story}/pages/{number}/art")
+    public ResponseEntity<byte[]> templateArt(@PathVariable String story, @PathVariable int number) {
+        return templates.art(story, number)
+                .map(b -> ResponseEntity.ok()
+                        .contentType(MediaType.IMAGE_JPEG)
+                        .cacheControl(CacheControl.maxAge(10, TimeUnit.MINUTES).cachePrivate())
+                        .body(b))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /** A finished page of a book that is still being made (or was just made); gone once the job leaves memory. */
+    @GetMapping("/api/books/{id}/pages/{number}/thumb")
+    public ResponseEntity<byte[]> pageThumb(@RequestAttribute(AuthFilter.USER) AuthSession user,
+                                            @PathVariable String id, @PathVariable int number) {
+        BookService.Job j = books.get(user.sub(), id);
+        byte[] thumb = j == null ? null : j.pageThumb(number);
+        if (thumb == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.maxAge(30, TimeUnit.MINUTES).cachePrivate())   // a finished page never changes
+                .body(thumb);
     }
 
     @GetMapping("/api/books/{id}/pdf")
@@ -142,7 +169,7 @@ public class BookController {
         if (meta.isPresent()) {
             data = store.pdf(user.sub(), id).orElse(null);
             name = meta.get().name();
-            Story saved = Stories.find(meta.get().story());
+            Story saved = templates.find(meta.get().story());
             if (saved != null) story = saved;
         } else {
             BookService.Job j = books.get(user.sub(), id);      // saved-to-disk failed: still served from memory
@@ -157,8 +184,8 @@ public class BookController {
                 .body(data);
     }
 
-    private static String storyTitle(String id) {
-        Story s = Stories.find(id);
+    private String storyTitle(String id) {
+        Story s = templates.find(id);
         return s == null ? "" : s.title();
     }
 

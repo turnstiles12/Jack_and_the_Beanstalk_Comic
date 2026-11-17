@@ -8,7 +8,7 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: IMAGE_PROVIDER
-        value: fal           # fal (FLUX + PuLID face lock, safety checker off) | cloudflare-ref | cloudflare | openai | mock
+        value: fal           # fal (FLUX + PuLID face lock, safety checker off) | fal-flux2 (FLUX.2 edit: faster, no face lock, safety checker may reject pages) | cloudflare-ref | cloudflare | openai | mock
       - key: FAL_KEY
         sync: false          # fal.ai API key (https://fal.ai/dashboard/keys); never commit it
       # Only needed if you switch IMAGE_PROVIDER back to cloudflare / cloudflare-ref:
@@ -31,7 +31,7 @@ services:
       - key: DATABASE_URL
         sync: false          # Neon Postgres connection string; holds accounts, books and cost totals
       - key: IMAGE_PARALLELISM
-        value: "8"           # 8 pages at a time (about 3 waves); more needs more RAM than the Starter plan has
+        value: "10"          # matches the fal.ai concurrency cap: 20 pages in 2 waves of 10
       - key: JOB_BUDGET_SECONDS
         value: "45"          # after this a page stops retrying and keeps its best image
       - key: VERIFY_PROVIDER

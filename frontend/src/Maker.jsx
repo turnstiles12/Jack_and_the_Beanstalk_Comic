@@ -12,6 +12,7 @@ export default function Maker({ onLibrary }) {
   const [consent, setConsent] = useState(false);
   const [phase, setPhase] = useState("form"); // form | working | done | error
   const [progress, setProgress] = useState(0);
+  const [donePages, setDonePages] = useState([]);   // page numbers whose real illustration is ready to show
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState(null);
   const [appearance, setAppearance] = useState("");
@@ -28,7 +29,7 @@ export default function Maker({ onLibrary }) {
   const storyTitle = stories.find((s) => s.id === story)?.title || "Jack and the Beanstalk";
 
   function startPolling(id) {
-    setProgress(0); setElapsed(0); setTookMs(null);
+    setProgress(0); setDonePages([]); setElapsed(0); setTookMs(null);
     const t0 = Date.now();
     clearInterval(clock.current);
     clock.current = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 500);
@@ -102,6 +103,7 @@ export default function Maker({ onLibrary }) {
       if (res.status === 404) throw new Error("The server restarted and lost your book. Please try again.");
       const s = await readJson(res);
       setProgress(s.pagesDone);
+      if (Array.isArray(s.donePages)) setDonePages(s.donePages);
       if (s.story) setStory(s.story);
       if (s.state === "DONE") { stopPolling(); setTookMs(s.elapsedMs || null); setPhase("done"); }
       if (s.state === "FAILED") { stopPolling(); setError(s.error || "Generation failed."); setPhase("error"); }
@@ -125,6 +127,19 @@ export default function Maker({ onLibrary }) {
   };
   const Hero = story === "red" ? HoodScene : BeanstalkScene;
 
+  // The 20 page slots: each one swaps from a numbered placeholder to the real illustration as soon as it is drawn.
+  const pageGrid = jobId && (
+    <ol className="page-grid" aria-label="Pages of your comic">
+      {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+        <li key={n} className={donePages.includes(n) ? "page-slot done" : "page-slot"}>
+          {donePages.includes(n)
+            ? <img src={`/api/books/${jobId}/pages/${n}/thumb`} alt={`Page ${n}`} />
+            : <span aria-label={`Page ${n}, not drawn yet`}>{n}</span>}
+        </li>
+      ))}
+    </ol>
+  );
+
   if (phase !== "form") {
     return (
       <main className="status-card">
@@ -140,6 +155,7 @@ export default function Maker({ onLibrary }) {
               {" "}({elapsed}s)
             </p>
             <progress max="20" value={progress} aria-label="Pages painted" />
+            {pageGrid}
             <p className="hint">Usually under a minute. You can keep this tab open.</p>
           </div>
         )}
@@ -154,6 +170,7 @@ export default function Maker({ onLibrary }) {
               <button className="btn btn-ghost" onClick={reset}>Make another</button>
             </div>
             {error && <p className="error">{error}</p>}
+            {donePages.length > 0 && pageGrid}
           </div>
         )}
         {phase === "error" && (

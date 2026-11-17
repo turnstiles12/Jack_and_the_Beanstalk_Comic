@@ -148,6 +148,13 @@ progress{width:100%;height:16px;border-radius:999px;overflow:hidden;border:0;bac
 progress::-webkit-progress-bar{background:#f1e8d3}
 progress::-webkit-progress-value{background:linear-gradient(90deg,var(--green),#7bd88f);transition:width .4s}
 progress::-moz-progress-bar{background:var(--green)}
+.page-grid{list-style:none;margin:1rem 0 .5rem;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.page-slot{aspect-ratio:2/3;border-radius:8px;overflow:hidden;background:#f1e8d3;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;font-weight:700;color:#b9a77f}
+.page-slot.done{border-style:solid;background:#fff}
+.page-slot img{width:100%;height:100%;object-fit:cover;display:block;animation:page-in .4s ease-out}
+@keyframes page-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.page-slot img{animation:none}}
+@media (max-width:420px){.page-grid{grid-template-columns:repeat(4,1fr);gap:6px}}
 
 /* bookshelf */
 .shelf{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:1.2rem}

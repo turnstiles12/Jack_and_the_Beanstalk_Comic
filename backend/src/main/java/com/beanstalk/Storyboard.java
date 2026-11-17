@@ -27,6 +27,9 @@ public final class Storyboard {
     /** Fills {LOOKS} for providers that receive the photo (openai, fal, mock). */
     public static final String PHOTO_LOOKS = "with the face from the reference photo";
 
+    /** Fills {LOOKS} when the pre-drawn template art is made: a plain stand-in hero that a real person later replaces. */
+    public static final String TEMPLATE_LOOKS = "with a plain friendly face and short brown hair";
+
     /** Sent as negative_prompt only (never in the positive prompt, which would plant the idea of text). */
     public static final String NEGATIVE =
             "text, letters, words, captions, writing, signature, watermark, logo, speech bubble, "
