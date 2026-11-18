@@ -38,3 +38,14 @@ services:
         value: none          # set to openai (needs OPENAI_API_KEY and a photo) to enable the face-match retry check (extra API calls)
       - key: STRIPE_SECRET_KEY
         sync: false          # Stripe secret key (sk_live_... / sk_test_...); never commit it
+      # ---- printed copies (Lulu Print API) ----
+      - key: LULU_CLIENT_KEY
+        sync: false          # from the Lulu developer portal > API keys
+      - key: LULU_CLIENT_SECRET
+        sync: false          # never commit it
+      - key: LULU_CONTACT_EMAIL
+        sync: false          # shop owner's email; Lulu writes here about problem print jobs
+      - key: LULU_API_URL
+        value: https://api.sandbox.lulu.com   # switch to https://api.lulu.com (with live keys) to really print
+      - key: APP_BASE_URL
+        sync: false          # public https address of this site (Lulu downloads the print PDFs from it)

@@ -49,6 +49,26 @@ Each Google account gets a row in `users` at sign-in (`UserStore`), and each fin
 - Env: `STRIPE_SECRET_KEY` (required; use `sk_test_...` first), optional `BOOK_PRICE_CENTS`, `APP_BASE_URL`. `STRIPE_PAYMENTS_DISABLED=true` skips payment for local development only.
 - Limitation: an unpaid/paid job lives in server memory, so a restart between paying and returning loses the book (the user is told to ask for a refund).
 
+## Printed copies ($24.99, printed and shipped by Lulu)
+Any saved book can be ordered as a real 6 x 9 in full-colour, saddle-stitched book from **My bookshelf > Order print**. One flat price, shipping included (`PRINT_PRICE_CENTS`, default 2499).
+
+1. The customer enters a shipping address. `POST /api/print-orders` asks Lulu's Print API for the print + shipping + tax cost to that address (`/print-job-cost-calculations/`). If it is over `PRINT_MAX_LULU_COST_CENTS` (default $23.90, the price minus Stripe's fee) the order is refused, so no single order loses money. Otherwise the order is saved (`print_orders`) and the customer pays $24.99 on Stripe Checkout.
+2. Back from Stripe, `POST /api/print-orders/{id}/confirm` checks the payment, builds the print files (`PrintFiles`: interior pages enlarged to 6.25 x 9.25 in for bleed; a wrap-around cover sized by Lulu's `/cover-dimensions/`, front = page 1's art under the title) and creates the Lulu print job. Lulu downloads the two PDFs from `/api/print-files/{random token}/interior.pdf|cover.pdf`, the only API path that needs no sign-in.
+3. **My bookshelf > Printed copies** shows each order with Lulu's latest status and a tracking link once shipped. If Lulu refuses an order after payment, it shows the reason and a **Try again** button (no second charge).
+
+Lulu charges the print and shipping cost to the card saved on your Lulu account; the customer's $24.99 goes to your Stripe account.
+
+| Env var | Purpose |
+|---|---|
+| `LULU_CLIENT_KEY`, `LULU_CLIENT_SECRET` | API keys from the Lulu developer portal (sandbox keys from developers.sandbox.lulu.com) |
+| `LULU_CONTACT_EMAIL` | your email; Lulu writes here about problem print jobs (required) |
+| `LULU_API_URL` | default `https://api.sandbox.lulu.com` (nothing is really printed). Set `https://api.lulu.com` with live keys to go live |
+| `APP_BASE_URL` | the site's public https address. **Required for printing**: Lulu downloads the PDFs from it, so printing is refused on localhost |
+| `LULU_POD_PACKAGE_ID` | product, default `0600X0900FCSTDSS080CW444GXX` (6 x 9, colour, saddle stitch, 80# coated, gloss). Keep the 6 x 9 trim |
+| `LULU_SHIPPING_LEVEL` | `MAIL` (default), `PRIORITY_MAIL`, `GROUND`, `EXPEDITED`, `EXPRESS` |
+
+**Before going live:** place one order in the Lulu sandbox and check that Lulu accepts the product id and both files (status moves past `CREATED`, not `REJECTED`). Then compare the US `MAIL` quote with the $23.90 cap.
+
 ## Rules and where they are enforced
 - Fixed style string: `Storyboard.STYLE`, appended last to every prompt (unit test asserts this for all 20 pages).
 - No text in images: no prompt asks for text or text-bearing objects; `negative_prompt` also lists text terms. All words come from `PdfComposer`.

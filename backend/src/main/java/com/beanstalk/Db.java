@@ -84,6 +84,14 @@ public class Db {
             + " zone text NOT NULL CHECK (zone IN ('TOP', 'BOTTOM')), PRIMARY KEY (story_id, number))",
         // Pre-drawn page art (JPEG) with a stand-in hero. A book edits the person into this picture instead of
         // drawing the page from nothing. NULL until TemplateArtPainter has drawn it.
-        "ALTER TABLE story_template_pages ADD COLUMN IF NOT EXISTS art bytea"
+        "ALTER TABLE story_template_pages ADD COLUMN IF NOT EXISTS art bytea",
+
+        // Printed copies ordered through Lulu (PrintOrderStore). file_token is the unguessable part of the public
+        // URLs Lulu downloads the print PDFs from; interior/cover hold those PDFs once payment is confirmed.
+        "CREATE TABLE IF NOT EXISTS print_orders (id uuid PRIMARY KEY, owner text NOT NULL, book_id uuid NOT NULL,"
+            + " status text NOT NULL, address jsonb NOT NULL, price_cents int NOT NULL, quote_cents int NOT NULL DEFAULT 0,"
+            + " file_token text NOT NULL UNIQUE, interior bytea, cover bytea, lulu_job_id bigint, lulu_status text NOT NULL DEFAULT '',"
+            + " tracking_url text NOT NULL DEFAULT '', error text NOT NULL DEFAULT '', created_at bigint NOT NULL, updated_at bigint NOT NULL)",
+        "CREATE INDEX IF NOT EXISTS print_orders_owner_created ON print_orders (owner, created_at DESC)"
     };
 }

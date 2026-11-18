@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Every /api/** call except /api/health and /api/auth/** needs BOTH the password step and a Google
+ * Every /api/** call except /api/health, /api/auth/** and /api/print-files/** (Lulu's file downloads) needs BOTH the password step and a Google
  * sign-in. The signed-in user is handed to controllers as a request attribute.
  */
 @Component
@@ -27,7 +27,8 @@ public class AuthFilter extends OncePerRequestFilter {
     protected boolean shouldNotFilter(HttpServletRequest req) {
         String p = ApiPaths.normalise(req.getRequestURI());
         boolean api = p.equals("/api") || p.startsWith("/api/");
-        boolean open = p.equals("/api/health") || p.startsWith("/api/auth/");
+        // /api/print-files/{token}/... is where Lulu's servers download print PDFs; the random token is the key.
+        boolean open = p.equals("/api/health") || p.startsWith("/api/auth/") || p.startsWith("/api/print-files/");
         return !api || open;          // static front-end files hold no secrets; all data is behind /api
     }
 

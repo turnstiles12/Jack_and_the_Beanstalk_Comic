@@ -18,9 +18,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Stripe Checkout over Stripe's plain REST API (no SDK). One checkout session = one book:
- * the book job id is stored as the session's client_reference_id, and the book only starts
- * generating after {@link #verifyPaid} sees the session as paid for the right amount.
+ * Stripe Checkout over Stripe's plain REST API (no SDK). One checkout session pays for one thing:
+ * a digital book (the book job id is the session's client_reference_id) or a printed copy (the print
+ * order id). Nothing is made or ordered until {@link #verifyPaid} sees the session as paid for the right amount.
  */
 @Service
 public class StripePayments {
@@ -40,31 +40,45 @@ public class StripePayments {
 
     public record Checkout(String sessionId, String url) {}
 
+    /** Checkout for one digital book at the book price. */
     public Checkout createCheckout(String jobId, String owner, String origin) throws Exception {
+        return createCheckout(jobId, owner, priceCents, "Personalized comic book",
+                origin + "/?book=" + jobId + "&session_id={CHECKOUT_SESSION_ID}",
+                origin + "/?canceled=1");
+    }
+
+    /** Checkout for any one item: {@code referenceId} comes back as client_reference_id and is checked in {@link #verifyPaid}. */
+    public Checkout createCheckout(String referenceId, String owner, int amountCents, String productName,
+                                   String successUrl, String cancelUrl) throws Exception {
         Map<String, String> f = new LinkedHashMap<>();
         f.put("mode", "payment");
         f.put("line_items[0][quantity]", "1");
         f.put("line_items[0][price_data][currency]", "usd");
-        f.put("line_items[0][price_data][unit_amount]", String.valueOf(priceCents));
-        f.put("line_items[0][price_data][product_data][name]", "Personalized comic book");
-        f.put("client_reference_id", jobId);
+        f.put("line_items[0][price_data][unit_amount]", String.valueOf(amountCents));
+        f.put("line_items[0][price_data][product_data][name]", productName);
+        f.put("client_reference_id", referenceId);
         f.put("metadata[owner]", owner);
-        f.put("success_url", origin + "/?book=" + jobId + "&session_id={CHECKOUT_SESSION_ID}");
-        f.put("cancel_url", origin + "/?canceled=1");
+        f.put("success_url", successUrl);
+        f.put("cancel_url", cancelUrl);
         JsonNode n = call(HttpRequest.newBuilder(URI.create(baseUrl + "/v1/checkout/sessions"))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(form(f))));
         return new Checkout(n.path("id").asText(), n.path("url").asText());
     }
 
-    /** True only if this Stripe session is fully paid, for this book and this account, at the right price. */
+    /** True only if this Stripe session is fully paid, for this book and this account, at the book price. */
     public boolean verifyPaid(String sessionId, String jobId, String owner) throws Exception {
+        return verifyPaid(sessionId, jobId, owner, priceCents);
+    }
+
+    /** True only if this Stripe session is fully paid, for this reference id and account, at exactly this amount. */
+    public boolean verifyPaid(String sessionId, String referenceId, String owner, int amountCents) throws Exception {
         if (sessionId == null || !sessionId.matches("cs_[A-Za-z0-9_]+")) return false;
         JsonNode n = call(HttpRequest.newBuilder(URI.create(baseUrl + "/v1/checkout/sessions/" + sessionId)).GET());
         return "paid".equals(n.path("payment_status").asText())
-                && jobId.equals(n.path("client_reference_id").asText())
+                && referenceId.equals(n.path("client_reference_id").asText())
                 && owner.equals(n.path("metadata").path("owner").asText())
-                && n.path("amount_total").asInt(-1) == priceCents
+                && n.path("amount_total").asInt(-1) == amountCents
                 && "usd".equals(n.path("currency").asText());
     }
 

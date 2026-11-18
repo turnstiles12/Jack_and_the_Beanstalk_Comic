@@ -11,7 +11,8 @@ import { Backdrop, Brand } from "./Scenery.jsx";
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [loadError, setLoadError] = useState("");
-  const [view, setView] = useState("make"); // make | library
+  // make | library. Coming back from paying for a printed copy lands on the bookshelf, where the order is confirmed.
+  const [view, setView] = useState(() => /[?&]print(_canceled)?=/.test(window.location.search) ? "library" : "make");
 
   const refresh = useCallback(async () => {
     try {
